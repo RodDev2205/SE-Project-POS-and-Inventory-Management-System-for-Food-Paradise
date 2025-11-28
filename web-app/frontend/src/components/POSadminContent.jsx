@@ -5,7 +5,7 @@ import ReceiptPanel from "../components/POScomponent/Panel/ReceiptPanel";
 import ReceiptModal from "../components/POScomponent/Modal/ReceiptModal";
 import VoidTransactionModal from "../components/POScomponent/Modal/VoidTransactionModal";
 
-export default function POSCashier({ isAdmin }) {
+export default function POSCashier({ isCashier, isAdmin }) {
   const [cart, setCart] = useState([]);
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
@@ -68,7 +68,7 @@ export default function POSCashier({ isAdmin }) {
   };
 
   return (
-    <div className="flex-1 flex gap-3 h-[calc(100vh-120px)] mt-4">
+    <div className="flex-1 flex gap-3 h-[calc(100vh-120px)]">
       <ItemsPanel
         items={filteredItems}
         activeCategory={activeCategory}
@@ -85,6 +85,7 @@ export default function POSCashier({ isAdmin }) {
         totalAmount={totalAmount}
         handleCheckout={handleCheckout}
         setCart={setCart}
+        isCashier={isCashier}
         isAdmin={isAdmin}
         handleVoidTransaction={handleVoidTransaction}
       />

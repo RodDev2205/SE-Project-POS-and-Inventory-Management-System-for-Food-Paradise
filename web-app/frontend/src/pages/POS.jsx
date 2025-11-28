@@ -1,6 +1,7 @@
 // src/POSLayout.js
 import React, { useState } from "react";
 import Header from "../components/POScomponent/Header";
+import { useNavigate } from "react-router-dom";
 
 import {
   ShoppingCart,
@@ -16,7 +17,8 @@ import ParadisePOS from "../components/POSadminContent";
 export default function POSLayout({ switchToAdmin }) {
   const [activePage, setActivePage] = useState("POS");
   const [searchTerm, setSearchTerm] = useState("");
-
+  const navigate = useNavigate();
+  
   // Example: Data to pass to Header (customizable)
   const headerProps = {
     title: activePage,
@@ -33,7 +35,9 @@ export default function POSLayout({ switchToAdmin }) {
   ];
 
   const handleLogout = () => {
-    switchToAdmin();
+    localStorage.removeItem("user");
+    sessionStorage.removeItem("user");
+    navigate("/");
   };
 
   const renderPage = () => {
@@ -43,20 +47,23 @@ export default function POSLayout({ switchToAdmin }) {
           <ParadisePOS
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
-            isAdmin={true}
+            isCashier={true}
           />
         );
       case "Records":
         return <Records />;
       case "Settings":
         return <Settings />;
+      case "Logout":
+        handleLogout();
+        return null; // Handled in Sidebar
       default:
         return <div className="p-6">Page not found.</div>;
     }
   };
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-gray-100">
 
       {/* Sidebar */}
       <Sidebar
@@ -72,12 +79,14 @@ export default function POSLayout({ switchToAdmin }) {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Header (now receives headerProps) */}
-        <div className="fixed w-full z-40">
-          <Header {...headerProps} />
-        </div>
+          <Header
+            title="Food Paradise: Cashier"
+            username="Cashier Username"
+            initials="CU"
+          />
 
         {/* Content */}
-        <main className="pt-20 p-6 overflow-y-auto">
+        <main className="flex-1 p-6 overflow-y-auto">
           {renderPage()}
         </main>
 

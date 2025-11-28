@@ -5,8 +5,9 @@ export default function ReceiptPanel({
   totalAmount,
   handleCheckout,
   setCart,
-  isAdmin,
+  isCashier,
   handleVoidTransaction,
+  isAdmin,
 }) {
   return (
     <div className="w-80 bg-white rounded-lg p-4 space-y-4 shadow h-full">
@@ -49,14 +50,16 @@ export default function ReceiptPanel({
         >
           Checkout
         </button>
-        <button
-          className="w-full bg-red-400 hover:bg-red-500 text-white font-bold py-2 rounded-lg"
-          onClick={() => setCart([])}
-        >
-          Cancel
-        </button>
-
         {isAdmin && (
+            <button
+                className="w-full bg-red-400 hover:bg-red-500 text-white font-bold py-2 rounded-lg"
+                onClick={() => setCart([])}
+                >
+                Cancel
+            </button>
+        )}
+
+        {isCashier && (
           <button
             className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 rounded-lg"
             onClick={handleVoidTransaction}

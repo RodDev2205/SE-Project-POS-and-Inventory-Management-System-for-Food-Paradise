@@ -81,7 +81,7 @@ function App() {
         return <MenuManagement openModal={openModal} />;
 
       case 'POS':
-        return <POS openModal={openModal} />;   // ⭐ Modal support
+        return <POS openModal={openModal} isAdmin={true} />;   // ⭐ Modal support
 
       case 'Inventory':
         return <InventoryManagement openModal={openModal} />;
