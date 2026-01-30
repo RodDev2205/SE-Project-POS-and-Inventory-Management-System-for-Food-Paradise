@@ -1,146 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import Sidebar from "../components/Sidebar";
+import Header from "../components/Header";
 import { 
   LayoutDashboard, 
-  ShoppingCart, 
+  Split, 
   BookOpen, 
   Warehouse, 
   Users, 
   History, 
   Settings 
-} from 'lucide-react';
+} from "lucide-react";
 
-import Sidebar from '../components/Sidebar';
-import Header from '../components/POScomponent/Header';
+// Import your page components
+import DashboardPage from "./OwnerDashboardPage";
+import ManagementPage from "./ManagementPage";
+import ReportPage from "./ReportPage";
+import LogsPage from "./LogsPage";
+import SettingsPage from "./SettingsPage";
 
-import DashboardContent from '../components/DashboardContent';
-import MenuManagement from '../components/MenuManagement';
-import InventoryManagement from '../components/InventoryManagement';
-import CashierManagement from '../components/cashiers/CashierManagement';
-import LogManagement from '../components/LogManagement';
-import POS from '../components/POSadminContent';
-
-import Modal from "../components/POScomponent/Modal/Modal";   // ✅ Reusable Modal Component
-import { useNavigate } from 'react-router-dom';
-
-// Placeholder Component
-const PlaceholderPage = ({ title }) => (
-  <div className="bg-white p-6 rounded-xl shadow-lg">
-    <h2 className="text-3xl font-bold mb-6 text-gray-800">{title}</h2>
-    <p className="text-gray-600">
-      Content for the <b>{title}</b> page will be implemented here.
-    </p>
-  </div>
-);
-
-function App() {
-  const [activeItem, setActiveItem] = useState('Dashboard');
-  
-  // ✅ GLOBAL MODAL STATES
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalContent, setModalContent] = useState(null);
-
-  const navigate = useNavigate();
-
-  // Function passed to children to open modal
-  const openModal = (content) => {
-    setModalContent(content);
-    setIsModalOpen(true);
+export default function OwnerDashboard() {
+  // --- Dashboard Data (can be passed to components as props) ---
+  const dashboardData = {
+    salesData: { today: 20000, weekly: 30000, monthly: 40000, yearly: 95000 },
+    branchPerformance: [
+      { rank: 1, name: "Main Branch", sales: 45000, change: 12 },
+      { rank: 2, name: "Downtown Branch", sales: 38000, change: -5 },
+      { rank: 3, name: "Mall Branch", sales: 32000, change: 8 },
+    ],
+    topItems: [
+      { name: "Spagetti", sold: 150, unit: "plates" },
+      { name: "Burger", sold: 120, unit: "orders" },
+      { name: "Halo-Halo", sold: 95, unit: "servings" },
+    ],
+    lowStockItems: [
+      { item: "Beef Patty", branch: "Main", remaining: 5, threshold: 10, status: "Critical" },
+      { item: "Lettuce", branch: "Downtown", remaining: 8, threshold: 15, status: "Low" },
+    ],
   };
 
-  // Close modal function
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalContent(null);
-  };
+  // --- Sidebar active state ---
+  const [activeItem, setActiveItem] = useState("Dashboard");
 
-  // Navigation items
-  const adminNavItems = [
-    { name: 'Dashboard', icon: LayoutDashboard },
-    { name: 'POS', icon: ShoppingCart },
-    { name: 'Menu', icon: BookOpen },
-    { name: 'Inventory', icon: Warehouse },
-    { name: 'Cashiers', icon: Users },
-    { name: 'Logs', icon: History },
-    { name: 'Settings', icon: Settings },
+  // --- Sidebar navigation items ---
+  const navItems = [
+    { name: "Dashboard", icon: LayoutDashboard },
+    { name: "Management", icon: Split },
+    { name: "Reports", icon: BookOpen },
+    { name: "Logs", icon: History },
+    { name: "Settings", icon: Settings },
   ];
 
-  // Logout Handler
+  // --- Logout handler ---
   const handleLogout = () => {
     localStorage.removeItem("user");
     sessionStorage.removeItem("user");
-    navigate("/");
+    window.location.href = "/login";
   };
 
-  // Render selected page
+  // --- Render content based on active sidebar item ---
   const renderContent = () => {
     switch (activeItem) {
-      case 'Dashboard':
-        return <DashboardContent openModal={openModal} />;
-
-      case 'Menu':
-        return <MenuManagement openModal={openModal} />;
-
-      case 'POS':
-        return <POS openModal={openModal} isAdmin={true} />;   // ⭐ Modal support
-
-      case 'Inventory':
-        return <InventoryManagement openModal={openModal} />;
-
-      case 'Cashiers':
-        return <CashierManagement openModal={openModal} />;
-
-      case 'Logs':
-        return <LogManagement openModal={openModal} />;
-
-      case 'Settings':
-        return <PlaceholderPage title="Settings" />;
-
-      case 'Logout':
-        handleLogout();
-        return null;
-
+      case "Dashboard":
+        return <DashboardPage data={dashboardData} />;
+      case "Management":
+        return <ManagementPage data={dashboardData} />;
+      case "Reports":
+        return <ReportPage data={dashboardData} />;
+      case "Logs":
+        return <LogsPage data={dashboardData} />;
+      case "Settings":
+        return <SettingsPage data={dashboardData} />;
       default:
-        return <PlaceholderPage title="404 - Page Not Found" />;
+        return <div>Page not found</div>;
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100">
-
       {/* Sidebar */}
       <Sidebar
-        logoHighlight="Food"
-        logoTitle="Paradise"
-        navItems={adminNavItems}
+        navItems={navItems}
         activeItem={activeItem}
         setActiveItem={setActiveItem}
+        logoTitle="Paradise"
+        logoHighlight="Food"
         onLogout={handleLogout}
       />
 
-      {/* MAIN AREA */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Header */}
         <Header
-          title="Food Paradise: Admin"
-          username="Admin Username"
-          initials="AU"
+            title="Food Paradise: Owner Dashboard"
+            username="Owner Username"
+            initials="OU"
         />
 
-        {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-6">
           {renderContent()}
         </main>
-
       </div>
-
-      {/* 🌟 GLOBAL MODAL (Reusable Everywhere) */}
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        {modalContent}
-      </Modal>
-
     </div>
   );
 }
-
-export default App;

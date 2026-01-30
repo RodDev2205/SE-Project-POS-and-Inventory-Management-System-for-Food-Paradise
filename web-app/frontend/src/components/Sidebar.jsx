@@ -1,4 +1,3 @@
-// components/common/Sidebar.jsx
 import React from 'react';
 import { LogOut } from 'lucide-react';
 
@@ -11,7 +10,7 @@ const Sidebar = ({
   onLogout,
 }) => {
   return (
-    <div className="w-64 bg-white text-gray-800 flex flex-col shadow-lg">
+    <div className="w-64 bg-white text-gray-800 flex flex-col shadow-lg h-screen">
 
       {/* Logo */}
       <div className="p-6 text-3xl font-extrabold text-center border-b border-gray-200">

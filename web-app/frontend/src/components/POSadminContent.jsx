@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Modal from "../components/POScomponent/Modal/Modal";
 import ItemsPanel from "../components/POScomponent/Panel/ItemsPanel";
 import ReceiptPanel from "../components/POScomponent/Panel/ReceiptPanel";
@@ -12,31 +12,28 @@ export default function POSCashier({ isCashier, isAdmin }) {
   const [sortOption, setSortOption] = useState("default");
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
+  const [items, setItems] = useState([]);
 
-  const items = [
-    { name: "Spaghetti", price: 75.0, category: "Meals" },
-    { name: "Iced tea", price: 45.0, category: "Drinks" },
-    { name: "Beef burger", price: 65.0, category: "Meals" },
-    { name: "Chicken", price: 110.0, category: "Meals" },
-    { name: "Halo-Halo", price: 75.0, category: "Dessert" },
-    { name: "Fries", price: 50.0, category: "Add-ons" },
-    { name: "Burger steak", price: 75.0, category: "Meals" },
-    { name: "Cola (liter)", price: 50.0, category: "Drinks" },
-    { name: "Coffee", price: 55.0, category: "Drinks" },
-  ];
+  // ================== FETCH PRODUCTS ==================
+  useEffect(() => {
+    fetch("http://localhost:5200/api/menu") // your getAllProducts endpoint
+      .then((res) => res.json())
+      .then((data) => setItems(data))
+      .catch((err) => console.error("Failed to fetch products:", err));
+  }, []);
 
   const totalAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
 
   const filteredItems = useMemo(() => {
     let result = items.filter(
       (item) =>
-        (activeCategory === "All" || item.category === activeCategory) &&
-        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+        (activeCategory === "All" || item.category_name === activeCategory) &&
+        item.product_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     switch (sortOption) {
       case "nameAsc":
-        return result.sort((a, b) => a.name.localeCompare(b.name));
+        return result.sort((a, b) => a.product_name.localeCompare(b.product_name));
       case "priceAsc":
         return result.sort((a, b) => a.price - b.price);
       case "priceDesc":
@@ -44,14 +41,42 @@ export default function POSCashier({ isCashier, isAdmin }) {
       default:
         return result;
     }
-  }, [activeCategory, searchTerm, sortOption]);
+  }, [activeCategory, searchTerm, sortOption, items]);
 
-  const handleCheckout = () => {
-    setModalContent(
-      <ReceiptModal total={totalAmount} cart={cart} onClose={() => setModalOpen(false)} />
-    );
-    setModalOpen(true);
+  // ================== HANDLE CHECKOUT ==================
+  const handleCheckout = async () => {
+    if (cart.length === 0) return alert("Cart is empty!");
+
+    try {
+      const response = await fetch("http://localhost:5200/api/pos/complete-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cart }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setModalContent(
+          <ReceiptModal
+            orderId={data.orderId}   // ✅ REAL DB order_id
+            total={totalAmount}
+            cart={cart}
+            onClose={() => setModalOpen(false)}
+          />
+        );
+
+        setModalOpen(true);
+        setCart([]);
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error completing sale.");
+    }
   };
+
 
   const handleVoidTransaction = () => {
     setModalContent(
@@ -83,7 +108,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
       <ReceiptPanel
         cart={cart}
         totalAmount={totalAmount}
-        handleCheckout={handleCheckout}
+        handleCheckout={handleCheckout} // now actually completes sale
         setCart={setCart}
         isCashier={isCashier}
         isAdmin={isAdmin}

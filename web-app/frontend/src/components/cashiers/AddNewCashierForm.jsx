@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 
 export default function AddNewCashierForm({ onAddCashier }) {
-    const [formData, setFormData] = useState({ name: '', username: '', password: '' });
+    const [formData, setFormData] = useState({ full_name: '', username: '', password: '' });
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -16,7 +16,7 @@ export default function AddNewCashierForm({ onAddCashier }) {
             lastLogin: 'Never',
         };
         onAddCashier(newCashier);
-        setFormData({ name: '', username: '', password: '' });
+        setFormData({ full_name: '', username: '', password: '' });
     };
 
     return (
@@ -27,9 +27,9 @@ export default function AddNewCashierForm({ onAddCashier }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input 
                     type="text" 
-                    name="name" 
+                    name="full_name" 
                     placeholder="Full Name" 
-                    value={formData.name} 
+                    value={formData.full_name} 
                     onChange={handleChange} 
                     className="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" 
                     required 

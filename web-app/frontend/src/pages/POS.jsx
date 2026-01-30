@@ -1,6 +1,6 @@
 // src/POSLayout.js
 import React, { useState } from "react";
-import Header from "../components/POScomponent/Header";
+import Header from "../components/Header";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -37,7 +37,7 @@ export default function POSLayout({ switchToAdmin }) {
   const handleLogout = () => {
     localStorage.removeItem("user");
     sessionStorage.removeItem("user");
-    navigate("/");
+    navigate("/login");
   };
 
   const renderPage = () => {
