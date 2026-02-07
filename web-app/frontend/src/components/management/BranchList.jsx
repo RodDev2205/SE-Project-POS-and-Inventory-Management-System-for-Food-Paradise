@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { Store } from "lucide-react";
 import AddBranchModal from "./AddBranches";
+import ViewBranchModal from "./ViewBranchModal";
+import EditBranchModal from "./EditBranchModal";
 
 export default function BranchList() {
   const [branches, setBranches] = useState([]);
-  const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const [selectedBranch, setSelectedBranch] = useState(null);
 
   const fetchBranches = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5200/api/branches/getBranches", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        "http://localhost:5200/api/branches/getBranches",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch branches");
 
@@ -30,13 +41,28 @@ export default function BranchList() {
   }, []);
 
   const handleCreateBranch = () => {
-    // Re-fetch everything from the server to ensure the UI matches the DB perfectly
     fetchBranches();
     setIsAddBranchModalOpen(false);
   };
 
+  const handleEditBranch = () => {
+    fetchBranches();
+    setIsEditModalOpen(false);
+  };
+
+  const formatTime = (timeString) => {
+    if (!timeString) return "--";
+    const date = new Date(`1970-01-01T${timeString}`);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
   return (
     <div>
+      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-800">Branch List</h2>
         <button
@@ -48,6 +74,7 @@ export default function BranchList() {
         </button>
       </div>
 
+      {/* Content */}
       {loading ? (
         <p>Loading branches...</p>
       ) : (
@@ -59,7 +86,6 @@ export default function BranchList() {
           )}
 
           {branches.map((branch) => (
-            // Use _id for MongoDB or id for other DBs. Added a fallback to index if needed.
             <div
               key={branch._id || branch.id}
               className="rounded-lg border border-gray-200 bg-white p-6 transition-shadow hover:shadow-md"
@@ -68,21 +94,41 @@ export default function BranchList() {
                 <div className="flex-1">
                   <div className="mb-2 flex items-center space-x-3">
                     <h3 className="text-lg font-semibold text-gray-800">
-                      {/* 3. Handle both 'name' and 'branchName' just in case */}
                       {branch.name || branch.branchName || "Unnamed Branch"}
                     </h3>
-                    <span className="rounded-full px-3 py-1 text-xs font-semibold bg-gray-100 text-gray-700">
-                      {branch.openingTime} - {branch.closingTime}
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+                      {formatTime(branch.openingTime)} -{" "}
+                      {formatTime(branch.closingTime)}
                     </span>
                   </div>
+
                   <div className="space-y-1 text-sm text-gray-600">
                     <p>{branch.address}</p>
                     <p>{branch.contact}</p>
                     <p>Created by: {branch.createdBy}</p>
                   </div>
                 </div>
+
                 <div className="flex space-x-2">
-                  <button className="rounded border border-green-600 px-3 py-1 font-medium text-green-600 hover:bg-green-50">
+                  {/* VIEW */}
+                  <button
+                    onClick={() => {
+                      setSelectedBranch(branch);
+                      setIsViewModalOpen(true);
+                    }}
+                    className="rounded border border-green-600 px-3 py-1 font-medium text-green-600 hover:bg-green-50"
+                  >
+                    View
+                  </button>
+
+                  {/* EDIT */}
+                  <button
+                    onClick={() => {
+                      setSelectedBranch(branch);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="rounded border border-green-600 px-3 py-1 font-medium text-green-600 hover:bg-green-50"
+                  >
                     Edit
                   </button>
                 </div>
@@ -92,6 +138,22 @@ export default function BranchList() {
         </div>
       )}
 
+      {/* View Modal */}
+      <ViewBranchModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        branch={selectedBranch}
+      />
+
+      {/* Edit Modal */}
+      <EditBranchModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        branch={selectedBranch}
+        onSubmit={handleEditBranch}
+      />
+
+      {/* Add Modal */}
       <AddBranchModal
         isOpen={isAddBranchModalOpen}
         onClose={() => setIsAddBranchModalOpen(false)}

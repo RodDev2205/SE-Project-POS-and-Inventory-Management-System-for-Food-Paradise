@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createBranch } from "../controllers/branchController.js";
-import { getBranches } from "../controllers/branchController.js";
+import { getBranches, getAllBranches } from "../controllers/branchController.js";
 import { verifyToken } from "../middlewares/verifyToken.js";
 import { requireRole } from "../middlewares/requireRole.js";
 
@@ -14,5 +14,6 @@ router.post(
   createBranch
 );
 router.get("/getBranches", verifyToken, getBranches);
+router.get("/getAll", verifyToken, getAllBranches);
 
 export default router;

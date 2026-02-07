@@ -65,3 +65,14 @@ export const getBranches = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const getAllBranches = async (req, res) => {
+  try {
+    const [branches] = await db.query(
+      `SELECT branch_id, branch_name FROM branches ORDER BY branch_name ASC`
+    );
+    res.status(200).json(branches);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch branches" });
+  }
+};

@@ -39,10 +39,16 @@ export default function Login() {
       setLoading(false);
 
       if (!response.ok) {
-        showPopup(data.error || "Invalid credentials!");
+        // If backend sent the specific Deactivated error
+        if (data.error === "Deactivated" || response.status === 403) {
+          showPopup(data.message || "Your account is deactivated.");
+        } else {
+          showPopup(data.error || "Invalid credentials!");
+        }
         return;
       }
 
+      // Since we filtered status on backend, if we are here, status is "Activate"
       const roleId = Number(data.role_id);
       localStorage.setItem("token", data.token);
       localStorage.setItem("role_id", roleId);
