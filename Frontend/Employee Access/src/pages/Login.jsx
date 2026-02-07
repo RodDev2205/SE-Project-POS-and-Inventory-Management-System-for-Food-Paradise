@@ -1,0 +1,128 @@
+import React, { useState } from 'react';
+import { User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+export default function Login() {
+    const [username, setUserName] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
+    const navigate = useNavigate();
+
+    const handleLogin = (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess(false);
+        setLoading(true);
+
+        if (!username.trim() || !password.trim()) {
+            setError('Please enter both username and password');
+            setLoading(false);
+            return;
+        }
+
+        setTimeout(() => {
+            setLoading(false);
+            navigate('/POS');
+        }, 600);
+    };
+
+    return (
+        <div className="w-full min-h-screen flex">
+            <div className="w-1/2 bg-emerald-700 text-white flex flex-col items-center justify-center p-12 relative rounded-r-2xl">
+                <div className="text-center space-y-6">
+                    <h1 className="text-3xl font-bold">Point of Sale</h1>
+                    <div className="w-2 h-2 bg-white rounded-full mx-auto"></div>
+                    <h2 className="text-2xl font-bold">Employee Management</h2>
+                    <div className="w-2 h-2 bg-white rounded-full mx-auto"></div>
+                    <h2 className="text-2xl font-bold">Inventory and Records</h2>
+                    <div className="w-2 h-2 bg-white rounded-full mx-auto"></div>
+                    <h2 className="text-2xl font-bold">Business Analytics</h2>
+                </div>
+
+                <div className="absolute bottom-8 text-center text-sm">
+                    <p>Brought to you by CodeStrive Systems,</p>
+                    <p>a WMSU CSS student company group</p>
+                </div>
+            </div>
+
+            <div className="w-1/2 bg-gray-100 flex flex-col items-center justify-center p-12">
+                <div className="w-full max-w-sm">
+                    <div className="w-32 h-32 bg-gray-300 rounded-full mx-auto mb-6 flex items-center justify-center">
+                        <User className="w-16 h-16 text-gray-500" />
+                    </div>
+
+                    <h2 className="text-center text-3xl font-bold mb-4 text-gray-800">Food Paradise</h2>
+                    <h3 className="text-center text-lg font-bold mb-8 text-gray-600">Employee Login</h3>
+
+                    {/* Login Form */}
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                            <input 
+                                type="text"
+                                placeholder="Username"
+                                value={username}
+                                onChange={(e) => setUserName(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                                disabled={loading}
+                            />
+                        </div>
+
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                            <input 
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                                disabled={loading}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(s => !s)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 p-1"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                disabled={loading}
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
+
+                        {error && (
+                            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                                <span className="text-sm text-red-600">{error}</span>
+                            </div>
+                        )}
+
+                        {success && (
+                            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <div className="w-4 h-4 text-green-600 shrink-0">✓</div>
+                                <span className="text-sm text-green-600">Login successful!</span>
+                            </div>
+                        )}
+
+                        <div className="text-center">
+                            <a href="#" className="text-sm text-emerald-700 hover:underline">
+                                Forgot Username or Password
+                            </a>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-2.5 bg-emerald-700 text-white font-semibold rounded hover:bg-emerald-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        >
+                            {loading ? 'LOGGING IN...' : 'LOGIN'}
+                        </button>
+                    </form>
+
+                    </div>
+                </div>
+            </div>
+    );
+}
