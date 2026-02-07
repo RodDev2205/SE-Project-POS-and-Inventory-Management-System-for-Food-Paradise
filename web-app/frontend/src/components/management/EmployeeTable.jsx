@@ -1,42 +1,32 @@
 import { useEffect, useState } from "react";
-import {
-  UserCircle,
-  Users,
-  Lock,
-  Unlock,
-  Eye,
-  Pencil,
-} from "lucide-react";
+import { UserCircle, Users, Lock, Unlock, Eye, Pencil } from "lucide-react";
 
 import AddAdminModal from "./AddAdmin";
 import AddCashierModal from "./AddCashier";
+import EditAdminModal from "./EditAdminModal";
 
 export default function UserList({ type }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  /* ==============================
-     Fetch users
-  ============================== */
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  // ==============================
+  // Fetch users
+  // ==============================
   const fetchUsers = async () => {
     setLoading(true);
     setError("");
-
     try {
       const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5200/api/superadmin/get${type}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const res = await fetch(
-        `http://localhost:5200/api/superadmin/get${type}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error("Failed to fetch users");
-      }
+      if (!res.ok) throw new Error("Failed to fetch users");
 
       const data = await res.json();
       setUsers(data || []);
@@ -51,9 +41,9 @@ export default function UserList({ type }) {
     fetchUsers();
   }, [type]);
 
-  /* ==============================
-     Toggle user status
-  ============================== */
+  // ==============================
+  // Toggle user status
+  // ==============================
   const toggleStatus = async (userId, currentStatus) => {
     const token = localStorage.getItem("token");
     const newStatus = currentStatus === "Activate" ? "Deactivate" : "Activate";
@@ -72,10 +62,7 @@ export default function UserList({ type }) {
       );
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to update status");
-      }
+      if (!res.ok) throw new Error(data.message || "Failed to update status");
 
       setUsers((prev) =>
         prev.map((user) =>
@@ -89,47 +76,40 @@ export default function UserList({ type }) {
     }
   };
 
-  /* ==============================
-     View / Edit handlers
-     (plug modals here later)
-  ============================== */
+  // ==============================
+  // Handle modals
+  // ==============================
   const handleViewUser = (user) => {
     console.log("View user:", user);
-    // open ViewUserModal(user)
   };
 
   const handleEditUser = (user) => {
-    console.log("Edit user:", user);
-    // open EditUserModal(user)
+    setSelectedUser(user);
+    setIsEditModalOpen(true);
   };
 
-  /* ==============================
-     After create
-  ============================== */
-  const handleCreateUser = async () => {
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedUser(null);
+  };
+
+  const handleCreateOrEditUser = async () => {
     await fetchUsers();
     setIsAddModalOpen(false);
+    handleCloseEditModal();
   };
 
-  /* ==============================
-     UI states
-  ============================== */
-  if (loading) {
-    return <p className="text-gray-600">Loading {type.toLowerCase()}s...</p>;
-  }
-
-  if (error) {
-    return <p className="text-red-500">{error}</p>;
-  }
+  // ==============================
+  // UI States
+  // ==============================
+  if (loading) return <p className="text-gray-600">Loading {type.toLowerCase()}s...</p>;
+  if (error) return <p className="text-red-500">{error}</p>;
 
   return (
     <div>
       {/* ===== Header ===== */}
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-800">
-          {type} List
-        </h2>
-
+        <h2 className="text-xl font-semibold text-gray-800">{type} List</h2>
         <button
           onClick={() => setIsAddModalOpen(true)}
           className="flex items-center rounded-lg bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700"
@@ -180,31 +160,20 @@ export default function UserList({ type }) {
 
                 return (
                   <tr key={userId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                      {user.name}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {user.branch || "—"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {user.username}
-                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-800">{user.name}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{user.branch || "—"}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{user.username}</td>
                     <td className="px-6 py-4">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          isActive
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
+                          isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                         }`}
                       >
                         {isActive ? "Activated" : "Deactivated"}
                       </span>
                     </td>
-
-                    {/* ===== Actions ===== */}
                     <td className="px-6 py-4">
                       <div className="flex justify-center gap-2">
-                        {/* View */}
                         <button
                           onClick={() => handleViewUser(user)}
                           className="rounded-full bg-blue-100 p-2 text-blue-600 hover:bg-blue-200"
@@ -213,7 +182,6 @@ export default function UserList({ type }) {
                           <Eye className="h-4 w-4" />
                         </button>
 
-                        {/* Edit */}
                         <button
                           onClick={() => handleEditUser(user)}
                           className="rounded-full bg-yellow-100 p-2 text-yellow-600 hover:bg-yellow-200"
@@ -222,7 +190,6 @@ export default function UserList({ type }) {
                           <Pencil className="h-4 w-4" />
                         </button>
 
-                        {/* Activate / Deactivate */}
                         <button
                           onClick={() => toggleStatus(userId, user.status)}
                           className={`rounded-full p-2 transition ${
@@ -230,15 +197,9 @@ export default function UserList({ type }) {
                               ? "bg-green-100 text-green-600 hover:bg-green-200"
                               : "bg-red-100 text-red-600 hover:bg-red-200"
                           }`}
-                          title={
-                            isActive ? "Deactivate user" : "Activate user"
-                          }
+                          title={isActive ? "Deactivate user" : "Activate user"}
                         >
-                          {isActive ? (
-                            <Unlock className="h-4 w-4" />
-                          ) : (
-                            <Lock className="h-4 w-4" />
-                          )}
+                          {isActive ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                         </button>
                       </div>
                     </td>
@@ -255,7 +216,7 @@ export default function UserList({ type }) {
         <AddAdminModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSubmit={handleCreateUser}
+          onSubmit={handleCreateOrEditUser}
         />
       )}
 
@@ -263,7 +224,16 @@ export default function UserList({ type }) {
         <AddCashierModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSubmit={handleCreateUser}
+          onSubmit={handleCreateOrEditUser}
+        />
+      )}
+
+      {type === "Admin" && (
+        <EditAdminModal
+          isOpen={isEditModalOpen}
+          user={selectedUser}
+          onClose={handleCloseEditModal}
+          onSubmit={handleCreateOrEditUser}
         />
       )}
     </div>
