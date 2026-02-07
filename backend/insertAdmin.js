@@ -3,9 +3,9 @@ import { db } from "./src/config/db.js";
 
 const createSuperAdmin = async () => {
   try {
-    const full_name = "Super_Admin";
-    const username = "superadmin2"; 
-    const password = "superadmin#22"; // your choice 
+    const full_name = "Admin123";
+    const username = "admin8"; 
+    const password = "admin12345"; // your choice 
 
     const hashed = await bcrypt.hash(password, 10);
 
