@@ -147,11 +147,16 @@ export const getStaffByBranch = async (req, res) => {
   }
 
   try {
-    // MySQL example
     const [rows] = await db.execute(
-      `SELECT user_id, full_name AS name, role_id, status
-       FROM users
-       WHERE branch_id = ?`,
+      `SELECT 
+          u.user_id, 
+          u.full_name AS name, 
+          u.role_id,
+          r.role_name,
+          u.status
+       FROM users u
+       JOIN roles r ON u.role_id = r.role_id
+       WHERE u.branch_id = ?`,
       [branch_id]
     );
 
@@ -162,5 +167,6 @@ export const getStaffByBranch = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch staff" });
   }
 };
+
 
 

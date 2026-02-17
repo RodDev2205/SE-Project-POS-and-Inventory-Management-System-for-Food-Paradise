@@ -93,7 +93,7 @@ export default function AddBranchModal({ isOpen, onClose, onSubmit }) {
             type="tel"
             placeholder="Contact Number"
             value={contact}
-            onChange={(e) => setContact(e.target.value)}
+            onChange={(e) => setContact(e.target.value.replace(/[^0-9]/g, ""))}
             required
             className="w-full rounded-lg border px-3 py-2"
           />

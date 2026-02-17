@@ -12,6 +12,8 @@ import portionRoutes from "./routes/portionRoutes.js";
 import posRoutes from "./routes/posRoutes.js";
 import branchRoutes from "./routes/branchRoutes.js";
 import superadminRoutes from "./routes/superadminRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import menu_superadmin_Routes from "./routes/menu_superadmin_Routes.js";
 
 
 dotenv.config();
@@ -32,6 +34,8 @@ app.use("/api/portions", portionRoutes);
 app.use("/api/pos", posRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/superadmin", superadminRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/menu-superadmin", menu_superadmin_Routes);
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {

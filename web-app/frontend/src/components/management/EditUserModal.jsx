@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, UserPlus } from "lucide-react";
 
-export default function EditAdminModal({
-  isOpen,
-  onClose,
-  admin,       // 👈 admin data to edit
-  onSubmit,    // 👈 submit handler
-}) {
+export default function EditUserModal({ isOpen, onClose, user, role, onUpdate }) {
   const [branches, setBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
@@ -19,37 +14,22 @@ export default function EditAdminModal({
     branch_id: "",
   });
 
-  /* ================= PREFILL DATA ================= */
-  useEffect(() => {
-    if (!isOpen || !admin) return;
-
-    setFormData({
-      full_name: admin.full_name || "",
-      username: admin.username || "",
-      password: "", // leave empty on edit
-      branch_id: admin.branch_id || "",
-    });
-  }, [isOpen, admin]);
-
   /* ================= FETCH BRANCHES ================= */
   useEffect(() => {
     if (!isOpen) return;
+    setLoadingBranches(true);
 
     const fetchBranches = async () => {
-      setLoadingBranches(true);
       try {
         const token = localStorage.getItem("token");
-
         const res = await fetch("http://localhost:5200/api/branches/getAll", {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         if (!res.ok) throw new Error("Failed to fetch branches");
-
         const data = await res.json();
         setBranches(data);
-      } catch (error) {
-        console.error(error);
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoadingBranches(false);
       }
@@ -58,7 +38,22 @@ export default function EditAdminModal({
     fetchBranches();
   }, [isOpen]);
 
-  if (!isOpen || !admin) return null;
+  /* ================= PREFILL DATA ================= */
+  useEffect(() => {
+    if (!isOpen || !user || branches.length === 0) return;
+
+    const resolvedBranchId =
+      user.branch_id ||
+      branches.find((b) => b.branch_name === user.branch)?.branch_id ||
+      "";
+
+    setFormData({
+      full_name: user.name || "",
+      username: user.username || "",
+      password: "",
+      branch_id: resolvedBranchId,
+    });
+  }, [isOpen, user, branches]);
 
   /* ================= HANDLERS ================= */
   const handleChange = (e) => {
@@ -72,78 +67,86 @@ export default function EditAdminModal({
     setErrorMsg("");
 
     try {
-      const payload = {
-        full_name: formData.full_name,
-        username: formData.username,
-        branch_id: formData.branch_id,
-        ...(formData.password && { password: formData.password }),
-      };
+      const { full_name, username, branch_id, password } = formData;
 
-      await onSubmit(admin.user_id, payload);
+      if (!full_name || !username || !branch_id) {
+        throw new Error("Full name, username, and branch are required");
+      }
+
+      const token = localStorage.getItem("token");
+      const payload = { full_name, username, branch_id };
+      if (password) payload.password = password;
+
+      const userId = user.id || user.user_id;
+      const res = await fetch(`http://localhost:5200/api/users/user/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Backend error:", data);
+        throw new Error(data.error || data.message || "Failed to update user");
+      }
+
+      onUpdate?.(data.user || { ...user, ...payload });
       onClose();
     } catch (err) {
-      setErrorMsg(err.message || "Failed to update admin");
+      setErrorMsg(err.message);
     } finally {
       setLoadingSubmit(false);
     }
   };
 
+  if (!isOpen || !user) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
-        
-        {/* ================= HEADER ================= */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center text-lg font-semibold text-gray-800">
             <UserPlus className="mr-2 h-5 w-5 text-green-600" />
-            Edit Admin
+            Edit {role}
           </h2>
           <button onClick={onClose}>
             <X className="h-5 w-5 text-gray-500 hover:text-gray-700" />
           </button>
         </div>
 
-        {/* ================= FORM ================= */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {errorMsg && (
-            <p className="text-sm text-red-500">{errorMsg}</p>
-          )}
+          {errorMsg && <p className="text-sm text-red-500">{errorMsg}</p>}
 
-          {/* Full Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Full Name
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Full Name</label>
             <input
               type="text"
               name="full_name"
-              required
               value={formData.full_name}
               onChange={handleChange}
+              required
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
             />
           </div>
 
-          {/* Username */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Username
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Username</label>
             <input
               type="text"
               name="username"
-              required
               value={formData.username}
               onChange={handleChange}
+              required
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
             />
           </div>
 
-          {/* Password (optional) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              New Password (optional)
-            </label>
+            <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
             <input
               type="password"
               name="password"
@@ -154,50 +157,28 @@ export default function EditAdminModal({
             />
           </div>
 
-          {/* Branch */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Branch
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Branch</label>
             <select
               name="branch_id"
-              required
               value={formData.branch_id}
               onChange={handleChange}
+              required
+              disabled={loadingBranches}
               className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus:border-green-500 focus:outline-none"
             >
-              <option value="" disabled>
-                {loadingBranches ? "Loading branches..." : "Select a branch"}
-              </option>
-
-              {branches.map((branch) => (
-                <option key={branch.branch_id} value={branch.branch_id}>
-                  {branch.branch_name}
-                </option>
+              <option value="" disabled>{loadingBranches ? "Loading branches..." : "Select a branch"}</option>
+              {branches.map((b) => (
+                <option key={b.branch_id} value={b.branch_id}>{b.branch_name}</option>
               ))}
             </select>
           </div>
 
-          {/* ================= FOOTER ================= */}
           <div className="flex justify-end space-x-2 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border px-4 py-2 text-gray-600 hover:bg-gray-100"
-              disabled={loadingSubmit}
-            >
+            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-gray-600 hover:bg-gray-100" disabled={loadingSubmit}>
               Cancel
             </button>
-
-            <button
-              type="submit"
-              disabled={loadingSubmit}
-              className={`rounded-lg px-4 py-2 font-medium text-white ${
-                loadingSubmit
-                  ? "cursor-not-allowed bg-gray-400"
-                  : "bg-green-600 hover:bg-green-700"
-              }`}
-            >
+            <button type="submit" disabled={loadingSubmit} className={`rounded-lg px-4 py-2 font-medium text-white ${loadingSubmit ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}>
               {loadingSubmit ? "Saving..." : "Save Changes"}
             </button>
           </div>

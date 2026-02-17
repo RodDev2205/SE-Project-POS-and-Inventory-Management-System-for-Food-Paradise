@@ -11,17 +11,24 @@ export default function MenuManagement() {
 
   const API_MENU = "http://localhost:5200/api/menu";
   const API_CATEGORIES = "http://localhost:5200/api/categories";
+  const token = localStorage.getItem("token"); // centralize token
 
+  // -------------------
   // Fetch categories and products on mount
+  // -------------------
   useEffect(() => {
     fetchCategories();
     fetchProducts();
   }, []);
 
-  // Fetch categories from backend
+  // -------------------
+  // Fetch categories
+  // -------------------
   const fetchCategories = async () => {
     try {
-      const res = await fetch(API_CATEGORIES);
+      const res = await fetch(API_CATEGORIES, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error("Failed to fetch categories");
       const data = await res.json();
       setCategories(data);
@@ -30,10 +37,14 @@ export default function MenuManagement() {
     }
   };
 
-  // Fetch products from backend
+  // -------------------
+  // Fetch products
+  // -------------------
   const fetchProducts = async () => {
     try {
-      const res = await fetch(API_MENU);
+      const res = await fetch(API_MENU, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) throw new Error("Failed to fetch products");
       const data = await res.json();
       setMenuItems(data);
@@ -42,7 +53,9 @@ export default function MenuManagement() {
     }
   };
 
+  // -------------------
   // Add new product
+  // -------------------
   const handleAddItem = async (item) => {
     try {
       const formData = new FormData();
@@ -53,6 +66,7 @@ export default function MenuManagement() {
 
       const res = await fetch(API_MENU, {
         method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
@@ -63,74 +77,81 @@ export default function MenuManagement() {
       }
 
       const newItem = await res.json();
-      setMenuItems([...menuItems, newItem]);
-      fetchCategories();
-      fetchProducts();
-      
+      setMenuItems((prev) => [...prev, newItem]); // immediate UI update
     } catch (err) {
       console.error("Add item failed:", err);
     }
   };
 
+  // -------------------
   // Delete product
+  // -------------------
   const handleDeleteItem = async (product_id) => {
     try {
-      const res = await fetch(`${API_MENU}/${product_id}`, { method: "DELETE" });
+      const res = await fetch(`${API_MENU}/${product_id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       if (!res.ok) {
         const text = await res.text();
         console.error("Delete item error:", text);
         return;
       }
-      setMenuItems(menuItems.filter(item => item.product_id !== product_id));
+
+      setMenuItems((prev) => prev.filter((item) => item.product_id !== product_id));
     } catch (err) {
       console.error("Delete item failed:", err);
     }
   };
 
+  // -------------------
   // Save edited product
+  // -------------------
   const handleSaveEditedItem = async (updatedItem) => {
-  try {
-    const formData = new FormData();
-    formData.append("product_name", updatedItem.product_name);
-    formData.append("category_id", parseInt(updatedItem.category_id)); // FIXED
-    formData.append("price", updatedItem.price);
-    formData.append("status", updatedItem.status);
+    try {
+      const formData = new FormData();
+      formData.append("product_name", updatedItem.product_name);
+      formData.append("category_id", parseInt(updatedItem.category_id));
+      formData.append("price", updatedItem.price);
+      formData.append("status", updatedItem.status);
 
-    // Only append file if a new image was selected
-    if (updatedItem.file) {
-      formData.append("image", updatedItem.file);
+      if (updatedItem.file) formData.append("image", updatedItem.file);
+
+      const res = await fetch(`${API_MENU}/${updatedItem.product_id}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Edit item error:", data);
+        alert("Failed to update item.");
+        return;
+      }
+
+      // Update UI immediately
+      setMenuItems((prev) =>
+        prev.map((item) => (item.product_id === data.product_id ? data : item))
+      );
+      setEditingItem(null);
+    } catch (err) {
+      console.error("Edit item error:", err);
     }
+  };
 
-    const res = await fetch(`http://localhost:5200/api/menu/${updatedItem.product_id}`, {
-      method: "PUT",
-      body: formData,
-    });
-
-    const data = await res.json();
-    console.log("Sending category_id:", updatedItem.category_id);
-
-    if (!res.ok) {
-      console.error("Edit item error:", data);
-      alert("Failed to update item.");
-      return;
-    }
-
-    // Refresh UI
-    fetchProducts();
-    fetchCategories();
-    setEditingItem(null);
-
-  } catch (err) {
-    console.error("Edit item error:", err);
-  }
-};
-
-
+  // -------------------
   // Filter items by category
+  // -------------------
   const filteredItems =
-    activeCategory === "All Items"
-      ? menuItems
-      : menuItems.filter(item => item.category_name === activeCategory);
+      activeCategory === "All Items"
+        ? menuItems.filter((item) => item.approval_status === "APPROVED")
+        : menuItems
+            .filter((item) => item.category_name === activeCategory)
+            .filter((item) => item.approval_status === "APPROVED");
+
 
   return (
     <div className="space-y-8">
@@ -144,20 +165,24 @@ export default function MenuManagement() {
           key="All Items"
           onClick={() => setActiveCategory("All Items")}
           className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition ${
-            activeCategory === "All Items" ? "bg-[#1B5E20] text-white" : "bg-gray-100 hover:bg-green-100"
+            activeCategory === "All Items"
+              ? "bg-[#1B5E20] text-white"
+              : "bg-gray-100 hover:bg-green-100"
           }`}
         >
           All Items ({menuItems.length})
         </button>
 
-        {categories.map(cat => {
-          const count = menuItems.filter(item => item.category_name === cat.category_name).length;
+        {categories.map((cat) => {
+          const count = menuItems.filter((item) => item.category_name === cat.category_name).length;
           return (
             <button
               key={cat.category_id}
               onClick={() => setActiveCategory(cat.category_name)}
               className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeCategory === cat.category_name ? "bg-[#1B5E20] text-white" : "bg-gray-100 hover:bg-green-100"
+                activeCategory === cat.category_name
+                  ? "bg-[#1B5E20] text-white"
+                  : "bg-gray-100 hover:bg-green-100"
               }`}
             >
               {cat.category_name} ({count})
@@ -169,7 +194,7 @@ export default function MenuManagement() {
       {/* Product Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredItems.length > 0 ? (
-          filteredItems.map(item => (
+          filteredItems.map((item) => (
             <MenuItemCard
               key={item.product_id}
               item={item}

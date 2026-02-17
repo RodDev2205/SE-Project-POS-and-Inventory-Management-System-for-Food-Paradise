@@ -3,16 +3,23 @@ import { UserCircle, Users, Lock, Unlock, Eye, Pencil } from "lucide-react";
 
 import AddAdminModal from "./AddAdmin";
 import AddCashierModal from "./AddCashier";
-import EditAdminModal from "./EditAdminModal";
+import EditUserModal from "./EditUserModal";
+import ViewUserModal from "./ViewUserModal";
 
 export default function UserList({ type }) {
   const [users, setUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterBranch, setFilterBranch] = useState("");
 
   // ==============================
   // Fetch users
@@ -30,6 +37,7 @@ export default function UserList({ type }) {
 
       const data = await res.json();
       setUsers(data || []);
+      setFilteredUsers(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -37,9 +45,48 @@ export default function UserList({ type }) {
     }
   };
 
+  // ==============================
+  // Fetch all branches for filter
+  // ==============================
+  const fetchBranches = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5200/api/branches/getAll", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch branches");
+      const data = await res.json();
+      setBranches(data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchBranches();
   }, [type]);
+
+  // ==============================
+  // Search and filter logic
+  // ==============================
+  useEffect(() => {
+    let temp = [...users];
+
+    if (searchTerm) {
+      temp = temp.filter(
+        (user) =>
+          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.username.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (filterBranch) {
+      temp = temp.filter((user) => (user.branch || "").toString() === filterBranch);
+    }
+
+    setFilteredUsers(temp);
+  }, [searchTerm, filterBranch, users]);
 
   // ==============================
   // Toggle user status
@@ -64,6 +111,7 @@ export default function UserList({ type }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update status");
 
+      // Update user status locally
       setUsers((prev) =>
         prev.map((user) =>
           (user.id || user.user_id) === userId
@@ -77,10 +125,44 @@ export default function UserList({ type }) {
   };
 
   // ==============================
+  // Add new user to list (from modal)
+  // ==============================
+  const handleAddUser = (newUser) => {
+    setUsers((prev) => [newUser, ...prev]); // add to top of list
+  };
+
+  // ==============================
+  // Update a single user after edit
+  // ==============================
+  const handleUpdateUser = (updatedUser) => {
+    const updatedId = updatedUser.id || updatedUser.user_id;
+
+    // Update main users list
+    setUsers((prev) =>
+      prev.map((user) =>
+        (user.id || user.user_id) === updatedId ? { ...user, ...updatedUser } : user
+      )
+    );
+
+    // Also update filteredUsers immediately so UI reflects changes without waiting
+    setFilteredUsers((prev) =>
+      prev.map((user) =>
+        (user.id || user.user_id) === updatedId ? { ...user, ...updatedUser } : user
+      )
+    );
+  };
+
+  // ==============================
   // Handle modals
   // ==============================
   const handleViewUser = (user) => {
-    console.log("View user:", user);
+    setSelectedUser(user);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedUser(null);
   };
 
   const handleEditUser = (user) => {
@@ -93,12 +175,6 @@ export default function UserList({ type }) {
     setSelectedUser(null);
   };
 
-  const handleCreateOrEditUser = async () => {
-    await fetchUsers();
-    setIsAddModalOpen(false);
-    handleCloseEditModal();
-  };
-
   // ==============================
   // UI States
   // ==============================
@@ -108,7 +184,7 @@ export default function UserList({ type }) {
   return (
     <div>
       {/* ===== Header ===== */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-800">{type} List</h2>
         <button
           onClick={() => setIsAddModalOpen(true)}
@@ -120,6 +196,40 @@ export default function UserList({ type }) {
             <Users className="mr-2 h-4 w-4" />
           )}
           Add {type}
+        </button>
+      </div>
+
+      {/* ===== Search & Filter ===== */}
+      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+        <input
+          type="text"
+          placeholder={`Search ${type.toLowerCase()} by name or username`}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none md:w-3/4"
+        />
+
+        <select
+          value={filterBranch}
+          onChange={(e) => setFilterBranch(e.target.value)}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none md:w-1/4"
+        >
+          <option value="">All Branches</option>
+          {branches.map((branch) => (
+            <option key={branch.branch_id} value={branch.branch_name}>
+              {branch.branch_name}
+            </option>
+          ))}
+        </select>
+
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setFilterBranch("");
+          }}
+          className="rounded-lg bg-gray-200 px-4 py-2 hover:bg-gray-300"
+        >
+          Clear
         </button>
       </div>
 
@@ -147,14 +257,14 @@ export default function UserList({ type }) {
           </thead>
 
           <tbody className="divide-y divide-gray-200">
-            {users.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <tr>
                 <td colSpan="5" className="py-6 text-center text-gray-500">
                   No {type.toLowerCase()} accounts found
                 </td>
               </tr>
             ) : (
-              users.map((user) => {
+              filteredUsers.map((user) => {
                 const userId = user.id || user.user_id;
                 const isActive = user.status === "Activate";
 
@@ -216,7 +326,7 @@ export default function UserList({ type }) {
         <AddAdminModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSubmit={handleCreateOrEditUser}
+          onSubmit={handleAddUser} // <-- directly add new user to list
         />
       )}
 
@@ -224,18 +334,23 @@ export default function UserList({ type }) {
         <AddCashierModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          onSubmit={handleCreateOrEditUser}
+          onSubmit={handleAddUser} // <-- same pattern
         />
       )}
 
-      {type === "Admin" && (
-        <EditAdminModal
-          isOpen={isEditModalOpen}
-          user={selectedUser}
-          onClose={handleCloseEditModal}
-          onSubmit={handleCreateOrEditUser}
-        />
-      )}
+      <EditUserModal
+        isOpen={isEditModalOpen}
+        user={selectedUser}
+        role={type}
+        onClose={handleCloseEditModal}
+        onUpdate={handleUpdateUser} // <-- instantly update edited user
+      />
+
+      <ViewUserModal
+        isOpen={isViewModalOpen}
+        user={selectedUser}
+        onClose={handleCloseViewModal}
+      />
     </div>
   );
 }

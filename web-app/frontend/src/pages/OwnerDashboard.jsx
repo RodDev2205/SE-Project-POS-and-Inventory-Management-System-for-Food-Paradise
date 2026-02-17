@@ -5,8 +5,7 @@ import {
   LayoutDashboard, 
   Split, 
   BookOpen, 
-  Warehouse, 
-  Users, 
+  SquareMenu,
   History, 
   Settings 
 } from "lucide-react";
@@ -17,6 +16,7 @@ import ManagementPage from "./ManagementPage";
 import ReportPage from "./ReportPage";
 import LogsPage from "./LogsPage";
 import SettingsPage from "./SettingsPage";
+import MenuListPage from "./MenuListPage";
 
 export default function OwnerDashboard() {
   // --- Dashboard Data (can be passed to components as props) ---
@@ -44,6 +44,7 @@ export default function OwnerDashboard() {
   // --- Sidebar navigation items ---
   const navItems = [
     { name: "Dashboard", icon: LayoutDashboard },
+    { name: "Menu & Inventory", icon: SquareMenu },
     { name: "Management", icon: Split },
     { name: "Reports", icon: BookOpen },
     { name: "Logs", icon: History },
@@ -62,6 +63,8 @@ export default function OwnerDashboard() {
     switch (activeItem) {
       case "Dashboard":
         return <DashboardPage data={dashboardData} />;
+      case "Menu & Inventory":
+        return <MenuListPage />;
       case "Management":
         return <ManagementPage data={dashboardData} />;
       case "Reports":

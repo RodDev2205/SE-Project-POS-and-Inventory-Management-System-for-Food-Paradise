@@ -16,7 +16,9 @@ export default function POSCashier({ isCashier, isAdmin }) {
 
   // ================== FETCH PRODUCTS ==================
   useEffect(() => {
-    fetch("http://localhost:5200/api/menu") // your getAllProducts endpoint
+    fetch("http://localhost:5200/api/menu", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
       .then((res) => res.json())
       .then((data) => setItems(data))
       .catch((err) => console.error("Failed to fetch products:", err));

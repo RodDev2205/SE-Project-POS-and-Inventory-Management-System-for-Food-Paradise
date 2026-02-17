@@ -9,6 +9,12 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
   const [staff, setStaff] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [staffError, setStaffError] = useState("");
+  const [menuItems, setMenuItems] = useState([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [menuError, setMenuError] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 3;
+
 
   // ===== Effect to fetch staff safely =====
   useEffect(() => {
@@ -43,6 +49,40 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
     fetchStaff();
   }, [activeTab, branch]);
 
+  useEffect(() => {
+    if (!branch || activeTab !== "Menu") return;
+
+    const fetchMenu = async () => {
+      setLoadingMenu(true);
+      setMenuError("");
+      setCurrentPage(1);
+
+      try {
+        const token = localStorage.getItem("token");
+
+        const res = await fetch(
+          `http://localhost:5200/api/menu-superadmin/branches/${branch.branch_id}/approved-menu`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (!res.ok) throw new Error("Failed to fetch menu");
+
+        const data = await res.json();
+        setMenuItems(data);
+      } catch (err) {
+        console.error(err);
+        setMenuError(err.message);
+      } finally {
+        setLoadingMenu(false);
+      }
+    };
+
+    fetchMenu();
+  }, [activeTab, branch]);
+
+
   // ===== Conditional render after hooks =====
   if (!isOpen || !branch) return null;
 
@@ -56,6 +96,16 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
       hour12: true,
     });
   };
+
+  // Pagination Logic
+  const totalPages = Math.ceil(menuItems.length / ITEMS_PER_PAGE);
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedItems = menuItems.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -127,7 +177,7 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
                           {user.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {user.role} — {user.status === "Activate" ? "Active" : "Deactivated"}
+                          {user.role_name} — {user.status === "Activate" ? "Active" : "Deactivated"}
                         </p>
                       </div>
                     </div>
@@ -137,7 +187,86 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
             </>
           )}
 
-          {activeTab === "Menu" && <EmptyState text="Branch menu items will appear here." />}
+          {activeTab === "Menu" && (
+            <>
+              {loadingMenu ? (
+                <p className="text-gray-500">Loading menu...</p>
+              ) : menuError ? (
+                <p className="text-red-500">{menuError}</p>
+              ) : menuItems.length === 0 ? (
+                <EmptyState text="No approved menu items for this branch." />
+              ) : (
+                <>
+                  {/* Menu Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {paginatedItems.map((item) => (
+                      <div
+                        key={item.product_id}
+                        className="rounded-lg border bg-white p-4 shadow-sm"
+                      >
+                        <div className="h-24 bg-gray-100 rounded mb-3 flex items-center justify-center">
+                          {item.image_path ? (
+                            <img
+                              src={`http://localhost:5200${item.image_path}`}
+                              alt={item.product_name}
+                              className="h-full object-cover rounded"
+                            />
+                          ) : (
+                            "No Image"
+                          )}
+                        </div>
+
+                        <p className="font-semibold text-gray-800">
+                          {item.product_name}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {item.category_name}
+                        </p>
+                        <p className="text-sm font-medium mt-1">
+                          ₱ {item.price}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-6">
+                      <button
+                        onClick={() => setCurrentPage((prev) => prev - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-4 py-2 rounded-md text-sm font-medium ${
+                          currentPage === 1
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                      >
+                        Previous
+                      </button>
+
+                      <span className="text-sm text-gray-600">
+                        Page {currentPage} of {totalPages}
+                      </span>
+
+                      <button
+                        onClick={() => setCurrentPage((prev) => prev + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-4 py-2 rounded-md text-sm font-medium ${
+                          currentPage === totalPages
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+
           {activeTab === "Inventory" && <EmptyState text="Inventory status and alerts go here." />}
           {activeTab === "Reports" && <EmptyState text="Sales and performance reports go here." />}
         </div>

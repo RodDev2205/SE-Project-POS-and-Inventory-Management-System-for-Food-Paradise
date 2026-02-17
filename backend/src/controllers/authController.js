@@ -44,9 +44,10 @@ export const login = async (req, res) => {
     // JWT token
     const token = jwt.sign(
       {
-        id: user.user_id,
+        user_id: user.user_id,
         username: user.username,
         role_id: user.role_id,
+        branch_id: user.branch_id
       },
       process.env.JWT_SECRET,
       { expiresIn: "1d" }
