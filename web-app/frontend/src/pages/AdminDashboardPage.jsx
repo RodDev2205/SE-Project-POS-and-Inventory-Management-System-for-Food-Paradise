@@ -6,7 +6,8 @@ import {
   Warehouse, 
   Users, 
   History, 
-  Settings 
+  Settings, 
+  MessageCircleMore
 } from 'lucide-react';
 
 import Sidebar from '../components/Sidebar';
@@ -60,7 +61,7 @@ function AdminDashboardPage() {
     { name: 'POS', icon: ShoppingCart },
     { name: 'Menu', icon: BookOpen },
     { name: 'Inventory', icon: Warehouse },
-    { name: 'Chat Room', icon: Users },  // Example additional item
+    { name: 'Chat Room', icon: MessageCircleMore },  // Example additional item
     { name: 'Cashiers', icon: Users },
     { name: 'Logs', icon: History },
     { name: 'Settings', icon: Settings },

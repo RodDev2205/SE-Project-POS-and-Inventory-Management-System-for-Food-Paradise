@@ -46,7 +46,7 @@ export const updateApprovalStatus = async (req, res) => {
       [
         approval_status,
         approval_status === "DECLINED" ? decline_reason : null,
-        req.user.id, // coming from decoded JWT
+        req.user.user_id, // coming from decoded JWT
         id
       ]
     );

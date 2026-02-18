@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-export default function EditItemModal({
-  item,
-  onClose,
-  onUpdated,
-  resetApproval = false, // set true only for declined items
-}) {
+export default function EditItemModal({ item, onClose, onUpdated }) {
   const [productName, setProductName] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [categories, setCategories] = useState([]);
@@ -15,56 +10,54 @@ export default function EditItemModal({
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const token = localStorage.getItem("token");
+  // Fetch valid categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("http://localhost:5200/api/categories");
+        const data = await res.json();
+        setCategories(data);
+      } catch (err) {
+        console.error("Failed to fetch categories", err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
-  // ------------------- LOAD ITEM & CATEGORIES -------------------
+  // Sync modal state when item changes
   useEffect(() => {
     if (!item) return;
 
-    // Set item data
     setProductName(item.product_name ?? "");
     setCategoryId(item.category_id ? String(item.category_id) : "");
     setPrice(item.price ?? "");
     setStatus(item.status ?? "available");
     setPreview(item.image_path ?? null);
     setFile(null);
+  }, [item]);
 
-    // Fetch categories
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("http://localhost:5200/api/categories", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error("Failed to fetch categories");
-        const data = await res.json();
-        setCategories(data);
-      } catch (err) {
-        console.error("Fetch categories failed:", err);
-        alert("Failed to load categories");
-      }
-    };
-
-    fetchCategories();
-  }, [item, token]);
-
-  // ------------------- IMAGE PREVIEW -------------------
+  // Image preview
   useEffect(() => {
     if (!file) return;
+
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result);
     reader.readAsDataURL(file);
   }, [file]);
 
-  // ------------------- FORM SUBMIT -------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!item) return;
 
-    if (!categoryId || !categories.find((cat) => String(cat.category_id) === categoryId)) {
+    // Validate category
+    if (!categories.find(cat => String(cat.category_id) === categoryId)) {
       return alert("Please select a valid category.");
     }
+
     if (!productName.trim()) return alert("Product name is required.");
     if (!price || Number(price) <= 0) return alert("Price must be greater than 0.");
+
+    const token = localStorage.getItem("token");
     if (!token) return alert("You are not authenticated.");
 
     setLoading(true);
@@ -75,24 +68,22 @@ export default function EditItemModal({
       formData.append("category_id", categoryId);
       formData.append("price", price);
       formData.append("status", status);
-
-      if (resetApproval) {
-        formData.append("approval_status", "PENDING");
-      }
-
       if (file) formData.append("image", file);
 
-      const res = await fetch(`http://localhost:5200/api/menu/${item.product_id}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
+      const res = await fetch(
+        `http://localhost:5200/api/menu/declined/${item.product_id}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         console.error("Update failed:", data);
-        return alert(data.message || "Failed to update item");
+        return alert(data.message || "Failed to update item. Check category.");
       }
 
       if (typeof onUpdated === "function") onUpdated(data);
@@ -110,6 +101,7 @@ export default function EditItemModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl p-6 relative">
+
         {/* Close button */}
         <button
           onClick={onClose}
@@ -119,16 +111,15 @@ export default function EditItemModal({
         </button>
 
         <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
-          Edit Menu Item
+          Edit Declined Menu Item
         </h2>
 
-        {resetApproval && (
-          <p className="mb-4 text-sm text-blue-700 bg-blue-100 p-2 rounded-md">
-            Editing will set approval status back to PENDING for review.
-          </p>
-        )}
+        <p className="mb-4 text-sm text-blue-700 bg-blue-100 p-2 rounded-md">
+          Editing will set approval status back to PENDING for review.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+
           {/* Product Name */}
           <div>
             <label className="block mb-1 font-medium">Product Name</label>
@@ -145,7 +136,7 @@ export default function EditItemModal({
           <div>
             <label className="block mb-1 font-medium">Category</label>
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
+              {categories.map(cat => (
                 <button
                   key={cat.category_id}
                   type="button"
@@ -218,12 +209,13 @@ export default function EditItemModal({
             >
               Cancel
             </button>
+
             <button
               type="submit"
               className="px-4 py-2 rounded-full bg-green-600 text-white"
               disabled={loading}
             >
-              {loading ? "Saving..." : "Save"}
+              {loading ? "Saving..." : "Save & Resubmit"}
             </button>
           </div>
         </form>

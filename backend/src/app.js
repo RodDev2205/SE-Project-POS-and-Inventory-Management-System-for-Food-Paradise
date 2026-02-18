@@ -15,6 +15,7 @@ import superadminRoutes from "./routes/superadminRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import menu_superadmin_Routes from "./routes/menu_superadmin_Routes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import activityRoutes from "./routes/activityRoutes.js"; // <-- import activity routes
 
 
 dotenv.config();
@@ -38,6 +39,7 @@ app.use("/api/superadmin", superadminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/menu-superadmin", menu_superadmin_Routes);
 app.use("/api/chat", chatRoutes); // <-- register chat routes
+app.use("/api/activity-logs", activityRoutes);
 // Print route
 
 app.post("/api/print-receipt", async (req, res) => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
+import logo from '../assets/logo.png'; // Optional: if you want to use an image logo instead of text
 
 const Sidebar = ({
   logoTitle = "AppTitle",
@@ -13,8 +14,12 @@ const Sidebar = ({
     <div className="w-64 bg-white text-gray-800 flex flex-col shadow-lg h-screen">
 
       {/* Logo */}
-      <div className="p-6 text-3xl font-extrabold text-center border-b border-gray-200">
-        <span className="text-green-600">{logoHighlight}</span>{logoTitle}
+      <div className="p-6 border-b border-gray-200 flex justify-center">
+        <img 
+          src={logo} 
+          alt="App Logo" 
+          className="h-16 object-contain"
+        />
       </div>
 
       {/* Navigation */}

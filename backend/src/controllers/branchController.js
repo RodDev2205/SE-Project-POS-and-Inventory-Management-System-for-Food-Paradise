@@ -28,7 +28,7 @@ export const createBranch = async (req, res) => {
         contact,
         openingTime,
         closingTime,
-        req.user.id // comes from JWT
+        req.user.user_id // comes from JWT
       ]
     );
 
