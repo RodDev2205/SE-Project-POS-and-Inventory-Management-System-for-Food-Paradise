@@ -59,6 +59,7 @@ function AdminDashboardPage() {
     { name: 'POS', icon: ShoppingCart },
     { name: 'Menu', icon: BookOpen },
     { name: 'Inventory', icon: Warehouse },
+    { name: 'Chat Room', icon: Users },  // Example additional item
     { name: 'Cashiers', icon: Users },
     { name: 'Logs', icon: History },
     { name: 'Settings', icon: Settings },
@@ -85,7 +86,7 @@ function AdminDashboardPage() {
 
       case 'Inventory':
         return <InventoryManagement openModal={openModal} />;
-
+      
       case 'Cashiers':
         return <CashierManagement openModal={openModal} />;
 

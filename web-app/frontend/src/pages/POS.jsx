@@ -17,7 +17,20 @@ import ParadisePOS from "../components/POSadminContent";
 export default function POSLayout({ switchToAdmin }) {
   const [activePage, setActivePage] = useState("POS");
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Verify authentication on mount
+  React.useEffect(() => {
+    const token = localStorage.getItem("token");
+    const roleId = localStorage.getItem("role_id");
+    
+    if (!token || !roleId || Number(roleId) !== 1) {
+      navigate("/login", { replace: true });
+    } else {
+      setLoading(false);
+    }
+  }, [navigate]);
   
   // Example: Data to pass to Header (customizable)
   const headerProps = {
@@ -36,8 +49,10 @@ export default function POSLayout({ switchToAdmin }) {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("role_id");
     sessionStorage.removeItem("user");
-    navigate("/login");
+    navigate("/login", { replace: true });
   };
 
   const renderPage = () => {
@@ -62,8 +77,19 @@ export default function POSLayout({ switchToAdmin }) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-100 items-center justify-center">
+        <div className="text-center">
+          <div className="border-4 border-emerald-700 border-t-transparent rounded-full w-16 h-16 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 font-semibold">Loading POS...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-50">
 
       {/* Sidebar */}
       <Sidebar
@@ -78,15 +104,15 @@ export default function POSLayout({ switchToAdmin }) {
       {/* Main Section */}
       <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Header (now receives headerProps) */}
-          <Header
-            title="Food Paradise: Cashier"
-            username="Cashier Username"
-            initials="CU"
-          />
+        {/* Header */}
+        <Header
+          title="Food Paradise: Cashier"
+          username="Cashier Username"
+          initials="CU"
+        />
 
-        {/* Content */}
-        <main className="flex-1 p-6 overflow-y-auto">
+        {/* Content - No extra padding */}
+        <main className="flex-1 overflow-hidden">
           {renderPage()}
         </main>
 

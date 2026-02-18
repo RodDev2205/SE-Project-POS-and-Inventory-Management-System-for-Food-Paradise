@@ -6,7 +6,8 @@ import {
   Split, 
   BookOpen, 
   SquareMenu,
-  History, 
+  History,
+  MessageCircleMore, 
   Settings 
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ import ReportPage from "./ReportPage";
 import LogsPage from "./LogsPage";
 import SettingsPage from "./SettingsPage";
 import MenuListPage from "./MenuListPage";
+import ChatRoomPage from "./ChatRoomPage";  // Example additional page
 
 export default function OwnerDashboard() {
   // --- Dashboard Data (can be passed to components as props) ---
@@ -46,6 +48,7 @@ export default function OwnerDashboard() {
     { name: "Dashboard", icon: LayoutDashboard },
     { name: "Menu & Inventory", icon: SquareMenu },
     { name: "Management", icon: Split },
+    { name: "Chat Room", icon: MessageCircleMore },
     { name: "Reports", icon: BookOpen },
     { name: "Logs", icon: History },
     { name: "Settings", icon: Settings },
@@ -67,6 +70,8 @@ export default function OwnerDashboard() {
         return <MenuListPage />;
       case "Management":
         return <ManagementPage data={dashboardData} />;
+      case "Chat Room":
+        return <ChatRoomPage />;
       case "Reports":
         return <ReportPage data={dashboardData} />;
       case "Logs":

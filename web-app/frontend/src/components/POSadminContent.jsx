@@ -13,15 +13,31 @@ export default function POSCashier({ isCashier, isAdmin }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // ================== FETCH PRODUCTS ==================
   useEffect(() => {
+    setLoading(true);
+    setError("");
     fetch("http://localhost:5200/api/menu", {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
-      .then((res) => res.json())
-      .then((data) => setItems(data))
-      .catch((err) => console.error("Failed to fetch products:", err));
+      .then((res) => {
+        if (!res.ok) throw new Error(`API Error: ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        console.log("Menu loaded:", data);
+        setItems(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch products:", err);
+        setError(`Failed to load menu: ${err.message}`);
+        setLoading(false);
+        setItems([]); // Set empty array as fallback
+      });
   }, []);
 
   const totalAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
@@ -95,27 +111,67 @@ export default function POSCashier({ isCashier, isAdmin }) {
   };
 
   return (
-    <div className="flex-1 flex gap-3 h-[calc(100vh-120px)]">
-      <ItemsPanel
-        items={filteredItems}
-        activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        sortOption={sortOption}
-        setSortOption={setSortOption}
-        cart={cart}
-        setCart={setCart}
-      />
-      <ReceiptPanel
-        cart={cart}
-        totalAmount={totalAmount}
-        handleCheckout={handleCheckout} // now actually completes sale
-        setCart={setCart}
-        isCashier={isCashier}
-        isAdmin={isAdmin}
-        handleVoidTransaction={handleVoidTransaction}
-      />
+    <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-b border-red-200 text-red-800 px-6 py-3 flex justify-between items-center">
+          <div>
+            <p className="font-semibold text-sm">⚠️ Error Loading Menu</p>
+            <p className="text-xs">{error}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && items.length === 0 && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="border-4 border-emerald-200 border-t-emerald-600 rounded-full w-16 h-16 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600 font-semibold">Loading menu items...</p>
+            <p className="text-gray-500 text-sm mt-2">Please wait</p>
+          </div>
+        </div>
+      )}
+
+      {/* No Items State */}
+      {!loading && items.length === 0 && !error && (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-gray-500 font-medium text-lg">No menu items available</p>
+        </div>
+      )}
+
+      {/* POS Layout */}
+      {items.length > 0 && (
+        <div className="flex-1 flex gap-4 p-4 overflow-hidden">
+          <ItemsPanel
+            items={filteredItems}
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            sortOption={sortOption}
+            setSortOption={setSortOption}
+            cart={cart}
+            setCart={setCart}
+          />
+          <ReceiptPanel
+            cart={cart}
+            totalAmount={totalAmount}
+            handleCheckout={handleCheckout}
+            setCart={setCart}
+            isCashier={isCashier}
+            isAdmin={isAdmin}
+            handleVoidTransaction={handleVoidTransaction}
+          />
+        </div>
+      )}
+
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)}>
         {modalContent}
       </Modal>

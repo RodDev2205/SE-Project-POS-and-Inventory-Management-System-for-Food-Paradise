@@ -2,9 +2,9 @@ import React from "react";
 
 export default function Records () {
     const records = [
-        { date: '10-30-25', transaction: '00259', amount: 155.00, status: 'Compeleted'},
-        { date: '10-29-25', transaction: '00357', amount: 225.00, status: 'Compeleted'},
-        { date: '10-29-25', transaction: '00355', amount: 320.00, status: 'Compeleted'},
+        { date: '10-30-25', transaction: '00259', amount: 155.00, status: 'Completed'},
+        { date: '10-29-25', transaction: '00357', amount: 225.00, status: 'Completed'},
+        { date: '10-29-25', transaction: '00355', amount: 320.00, status: 'Completed'},
     ];
 
     return (
