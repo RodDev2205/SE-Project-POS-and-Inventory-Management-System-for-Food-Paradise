@@ -18,6 +18,7 @@ import InventoryManagement from '../components/inventory/InventoryManagement';
 import CashierManagement from '../components/cashiers/CashierManagement';
 import LogManagement from '../components/LogManagement';
 import POS from '../components/POSadminContent';
+import ChatRoomPage from './ChatRoomPage';  // Example additional page
 
 import Modal from "../components/POScomponent/Modal/Modal";   // ✅ Reusable Modal Component
 import { useNavigate } from 'react-router-dom';
@@ -86,7 +87,8 @@ function AdminDashboardPage() {
 
       case 'Inventory':
         return <InventoryManagement openModal={openModal} />;
-      
+      case 'Chat Room':
+        return <ChatRoomPage openModal={openModal} />;
       case 'Cashiers':
         return <CashierManagement openModal={openModal} />;
 

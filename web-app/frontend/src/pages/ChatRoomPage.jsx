@@ -1,50 +1,167 @@
-import React, { useState } from "react";
-import {
-  Send,
-  Paperclip,
-  Image as ImageIcon,
-  Users,
-  LogOut,
-} from "lucide-react";
-
-const branches = [
-  { id: "branch1", name: "Ern Branch", lastMessage: "Magpainom kana bos", lastTime: "09:20 AM", unread: 0 },
-  { id: "branch2", name: "Mar Branch", lastMessage: "Can we also get more rice sacks?", lastTime: "09:20 AM", unread: 2 },
-  { id: "branch3", name: "Mommy Oni Branch", lastMessage: "Sales report ready", lastTime: "Yesterday", unread: 0 },
-  { id: "branch4", name: "Ash Branch", lastMessage: "Delivery arrived", lastTime: "2h ago", unread: 1 },
-];
-
-const fakeMessages = [
-  { id: 1, sender: "Admin", text: "HOY KEN YA PONE HALO BLOCK NA MIO BAG!!!!", time: "09:12 AM", isOwn: true },
-  { id: 2, sender: "Rods", text: "Pala yalang palta pede ya ase kasa", time: "09:15 AM", isOwn: false },
-  { id: 3, sender: "Admin", text: "peste gad kel ba ken ya pone!", time: "09:17 AM", isOwn: true },
-  { id: 4, sender: "Claire", text: "boss rodolfo, mga bata mo kami!", time: "09:20 AM", isOwn: false },
-  { id: 5, sender: "Maria", text: "6,7 😁", time: "09:20 AM", isOwn: false },
-  { id: 6, sender: "Ern", text: "Miss na kita boss 🥲", time: "09:20 AM", isOwn: false },
-  { id: 7, sender: "Jobert", text: "Magpainom kana boss", time: "09:20 AM", isOwn: false },
-];
+import React, { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
+import { Send, LogOut, Users } from "lucide-react";
+import { jwtDecode } from "jwt-decode";
 
 export default function ChatRoom() {
-  const [activeBranchId, setActiveBranchId] = useState("branch1");
+  const [branches, setBranches] = useState([]);
+  const [activeBranchId, setActiveBranchId] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  const activeBranch =
-    branches.find((b) => b.id === activeBranchId) || branches[0];
+  const token = localStorage.getItem("token");
 
+  // ======== DECODE JWT TO GET CURRENT USER ========
+  useEffect(() => {
+    if (token) {
+      try {
+        const decoded = jwtDecode(token);
+        setCurrentUser(decoded);
+      } catch (err) {
+        console.error("Failed to decode token:", err);
+      }
+    }
+  }, [token]);
+
+  // ======== SOCKET.IO SETUP ========
+  useEffect(() => {
+    if (!token) {
+      console.error("No token found");
+      return;
+    }
+
+    // Connect socket
+    socketRef.current = io("http://localhost:5200", {
+      auth: { token },
+      reconnectionDelay: 1000,
+      reconnection: true,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5,
+    });
+
+    // Listen for incoming messages
+    socketRef.current.on("receiveMessage", (msg) => {
+      console.log("📨 Received message:", msg);
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    // Listen for user join/leave notifications
+    socketRef.current.on("userJoined", (data) => {
+      console.log("✅ User joined:", data);
+    });
+
+    socketRef.current.on("userLeft", (data) => {
+      console.log("❌ User left:", data);
+    });
+
+    socketRef.current.on("connect", () => {
+      console.log("✅ Socket connected");
+    });
+
+    socketRef.current.on("connect_error", (err) => {
+      console.error("❌ Socket connection error:", err.message);
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, [token]);
+
+  // ======== FETCH BRANCHES WITH MESSAGES ========
+  useEffect(() => {
+    const fetchBranches = async () => {
+      if (!token) return;
+      try {
+        setIsLoading(true);
+        const res = await fetch("http://localhost:5200/api/chat/branches-with-messages", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        console.log("📦 Branches fetched:", data);
+        setBranches(data || []);
+        if (data && data.length > 0 && !activeBranchId) {
+          setActiveBranchId(data[0].branch_id);
+        }
+      } catch (err) {
+        console.error("Error fetching branches:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBranches();
+  }, [token, activeBranchId]);
+
+  // ======== JOIN ROOM & FETCH MESSAGES WHEN BRANCH CHANGES ========
+  useEffect(() => {
+    if (!activeBranchId || !socketRef.current) return;
+
+    // Join branch room
+    socketRef.current.emit("joinBranchRoom", { branch_id: activeBranchId });
+    console.log(`📍 Joining branch room: ${activeBranchId}`);
+
+    // Fetch last messages from backend
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:5200/api/chat/branch/${activeBranchId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        const data = await res.json();
+        console.log("💬 Messages fetched:", data);
+        setMessages(data || []);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      }
+    };
+
+    fetchMessages();
+  }, [activeBranchId, token]);
+
+  // ======== SCROLL TO BOTTOM ========
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // ======== SEND MESSAGE ========
   const handleSend = (e) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() || !activeBranchId) {
+      console.warn("Message empty or no branch selected");
+      return;
+    }
+
+    console.log("📤 Sending message:", message);
+
+    socketRef.current.emit("sendMessage", {
+      branch_id: activeBranchId,
+      message: message.trim(),
+    });
+
     setMessage("");
   };
 
+  const activeBranch = branches.find((b) => b.branch_id === activeBranchId) || {};
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-100">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-100">
-      {/* Content Wrapper */}
       <div className="flex flex-1 gap-2 p-2 min-h-0 overflow-hidden">
-
-        {/* ================= CHAT AREA ================= */}
+        {/* Chat Area */}
         <div className="flex flex-col flex-1 bg-white rounded-xl shadow-sm min-h-0 overflow-hidden">
-
           {/* Header */}
           <header className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -53,10 +170,10 @@ export default function ChatRoom() {
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-white">
-                  {activeBranch.name}
+                  {activeBranch.branch_name || "Select a Branch"}
                 </h1>
                 <p className="text-xs text-emerald-100">
-                  Superadmin • Online
+                  {activeBranch.sender_name && `Last: ${activeBranch.sender_name}`}
                 </p>
               </div>
             </div>
@@ -65,45 +182,50 @@ export default function ChatRoom() {
             </button>
           </header>
 
-          {/* Messages (ONLY this scrolls) */}
+          {/* Messages Area */}
           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 bg-gray-50">
-            {fakeMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.isOwn ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-xs rounded-lg px-4 py-2.5 ${
-                    msg.isOwn
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white text-gray-800 border border-gray-200"
-                  }`}
-                >
-                  {!msg.isOwn && (
-                    <p className="text-xs font-medium mb-1 text-emerald-700">
-                      {msg.sender}
-                    </p>
-                  )}
-                  <p className="text-sm break-words">{msg.text}</p>
-                  <div className="text-xs mt-1 opacity-70 text-right">
-                    {msg.time}
-                  </div>
-                </div>
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <p>No messages yet. Start a conversation!</p>
               </div>
-            ))}
+            ) : (
+              messages.map((msg, idx) => {
+                const isCurrentUser = msg.sender_id === currentUser.user_id;
+                return (
+                  <div
+                    key={msg.message_id || idx}
+                    className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-xs rounded-lg px-4 py-2.5 ${
+                        isCurrentUser
+                          ? "bg-emerald-600 text-white"
+                          : "bg-white text-gray-800 border border-gray-200"
+                      }`}
+                    >
+                      {!isCurrentUser && (
+                        <p className="text-xs font-medium mb-1 text-emerald-700">
+                          {msg.full_name || msg.username || "Unknown"}
+                        </p>
+                      )}
+                      <p className="text-sm break-words">{msg.message}</p>
+                      <div className="text-xs mt-1 opacity-70 text-right">
+                        {new Date(msg.created_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
+          {/* Input Area */}
           <footer className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
             <form onSubmit={handleSend} className="flex items-center gap-2">
-              <button type="button" className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                <Paperclip className="w-5 h-5" />
-              </button>
-
-              <button type="button" className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg">
-                <ImageIcon className="w-5 h-5" />
-              </button>
-
               <input
                 type="text"
                 value={message}
@@ -111,11 +233,10 @@ export default function ChatRoom() {
                 placeholder="Type a message..."
                 className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm"
               />
-
               <button
                 type="submit"
-                disabled={!message.trim()}
-                className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                disabled={!message.trim() || !activeBranchId}
+                className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -123,63 +244,60 @@ export default function ChatRoom() {
           </footer>
         </div>
 
-        {/* ================= SIDEBAR ================= */}
+        {/* Sidebar - Branch List */}
         <div className="w-80 flex flex-col bg-white rounded-xl shadow-sm min-h-0 overflow-hidden">
-
           <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-white">
-              Branch Chats
-            </h2>
+            <h2 className="text-lg font-semibold text-white">Branch Chats</h2>
             <p className="text-xs text-emerald-100">
-              Select a branch to chat
+              {isLoading ? "Loading..." : `${branches.length} branch${branches.length !== 1 ? "es" : ""}`}
             </p>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {branches.map((branch) => {
-              const isActive = branch.id === activeBranchId;
-
-              return (
-                <button
-                  key={branch.id}
-                  onClick={() => setActiveBranchId(branch.id)}
-                  className={`w-full px-4 py-3 border-b text-left hover:bg-emerald-50 ${
-                    isActive
-                      ? "bg-emerald-50 border-l-4 border-l-emerald-600"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center font-semibold text-sm">
-                      {branch.name.charAt(0)}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between">
-                        <h3 className="font-medium text-sm truncate">
-                          {branch.name}
-                        </h3>
-                        <span className="text-xs text-gray-500">
-                          {branch.lastTime}
-                        </span>
+            {branches.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-sm">
+                <p>No branches available</p>
+              </div>
+            ) : (
+              branches.map((branch) => {
+                const isActive = branch.branch_id === activeBranchId;
+                return (
+                  <button
+                    key={branch.branch_id}
+                    onClick={() => setActiveBranchId(branch.branch_id)}
+                    className={`w-full px-4 py-3 border-b text-left hover:bg-emerald-50 transition ${
+                      isActive ? "bg-emerald-50 border-l-4 border-l-emerald-600" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                        {branch.branch_name.charAt(0).toUpperCase()}
                       </div>
-                      <p className="text-xs text-gray-600 truncate mt-1">
-                        {branch.lastMessage}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <h3 className="font-medium text-sm truncate">
+                            {branch.branch_name}
+                          </h3>
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {branch.lastTime}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 truncate mt-1">
+                          {branch.sender_name && (
+                            <span className="font-semibold text-emerald-600">
+                              {branch.sender_name}:{" "}
+                            </span>
+                          )}
+                          {branch.lastMessage}
+                        </p>
+                      </div>
                     </div>
-
-                    {branch.unread > 0 && (
-                      <span className="bg-emerald-600 text-white text-xs px-2 py-0.5 rounded-full">
-                        {branch.unread}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
-
       </div>
     </div>
   );
