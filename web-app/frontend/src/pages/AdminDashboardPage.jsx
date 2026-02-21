@@ -7,7 +7,8 @@ import {
   Users, 
   History, 
   Settings, 
-  MessageCircleMore
+  MessageCircleMore,
+  ChartNoAxesCombined
 } from 'lucide-react';
 
 import Sidebar from '../components/Sidebar';
@@ -20,6 +21,7 @@ import CashierManagement from '../components/cashiers/CashierManagement';
 import LogManagement from '../components/LogManagement';
 import POS from '../components/POSadminContent';
 import ChatRoomPage from './ChatRoomPage';  // Example additional page
+import AdminReportPage from './AdminReportPage';  // Example additional page
 
 import Modal from "../components/POScomponent/Modal/Modal";   // ✅ Reusable Modal Component
 import { useNavigate } from 'react-router-dom';
@@ -63,6 +65,7 @@ function AdminDashboardPage() {
     { name: 'Inventory', icon: Warehouse },
     { name: 'Chat Room', icon: MessageCircleMore },  // Example additional item
     { name: 'Cashiers', icon: Users },
+    { name: 'Reports', icon: ChartNoAxesCombined },  // Example additional item
     { name: 'Logs', icon: History },
     { name: 'Settings', icon: Settings },
   ];
@@ -92,7 +95,8 @@ function AdminDashboardPage() {
         return <ChatRoomPage openModal={openModal} />;
       case 'Cashiers':
         return <CashierManagement openModal={openModal} />;
-
+      case 'Reports':
+        return <AdminReportPage openModal={openModal} />;
       case 'Logs':
         return <LogManagement openModal={openModal} />;
 

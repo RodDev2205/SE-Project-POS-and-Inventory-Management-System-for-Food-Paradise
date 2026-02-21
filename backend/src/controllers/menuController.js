@@ -106,7 +106,7 @@ export const updateProduct = async (req, res) => {
 
     // Return the updated product including category_name
     const [row] = await db.query(
-      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status, 
+      `SELECT p.product_id, p.product_name, p.price, p.status, p.approval_status, p.category_id,
               p.image_name, p.image_path, p.created_by, p.branch_id, c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id

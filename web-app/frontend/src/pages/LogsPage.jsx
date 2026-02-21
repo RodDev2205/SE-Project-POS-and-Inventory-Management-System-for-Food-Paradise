@@ -11,15 +11,16 @@ export default function LogsPage() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch activity logs from backend
+  // ===========================
+  // Fetch activity logs
+  // ===========================
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const token = localStorage.getItem("token"); // your JWT
+        const token = localStorage.getItem("token");
         const res = await fetch("http://localhost:5200/api/activity-logs", {
           headers: { Authorization: `Bearer ${token}` },
         });
-
 
         if (!res.ok) throw new Error("Failed to fetch activity logs");
 
@@ -35,9 +36,46 @@ export default function LogsPage() {
     fetchLogs();
   }, []);
 
+  // ===========================
+  // Timestamp Formatting
+  // ===========================
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Manila", // 🇵🇭 Philippines timezone
+    }).format(date);
+  };
+
+  const getTimeAgo = (timestamp) => {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - date) / 1000);
+
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600)
+      return `${Math.floor(diffInSeconds / 60)} minute(s) ago`;
+    if (diffInSeconds < 86400)
+      return `${Math.floor(diffInSeconds / 3600)} hour(s) ago`;
+    if (diffInSeconds < 604800)
+      return `${Math.floor(diffInSeconds / 86400)} day(s) ago`;
+
+    return "";
+  };
+
+  // ===========================
   // Map log type to icon
+  // ===========================
   const getActivityIcon = (type) => {
-    switch(type) {
+    switch (type) {
       case 'success': return <CheckCircle size={20} className="text-green-600" />;
       case 'error': return <XCircle size={20} className="text-red-600" />;
       case 'warning': return <AlertCircle size={20} className="text-yellow-600" />;
@@ -46,7 +84,9 @@ export default function LogsPage() {
     }
   };
 
-  // Map log type to badge color
+  // ===========================
+  // Map badge color
+  // ===========================
   const getActivityBadge = (type) => {
     const badges = {
       success: 'bg-green-100 text-green-700',
@@ -57,54 +97,74 @@ export default function LogsPage() {
     return badges[type] || 'bg-gray-100 text-gray-700';
   };
 
-  // Filter logs based on search, type, and date
-  const filteredLogs = activityLogs
-    .map(log => ({
-      id: log.log_id,
-      user: log.user || "System",
-      action: log.action || log.description,
-      details: log.reference_id ? `Ref ID: ${log.reference_id}` : "",
-      timestamp: log.timestamp,
-      type: log.activity_type === "login" ? "success" : log.activity_type || "info",
-      branch: log.branch || "System"
-    }))
-    .filter(log => {
-      const matchesSearch = log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            log.details.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesFilter = selectedFilter === 'all' || log.type === selectedFilter;
+  // ===========================
+  // Normalize Logs
+  // ===========================
+  const normalizedLogs = activityLogs.map(log => ({
+    id: log.log_id,
+    user: log.user || "System",
+    action: log.action || log.description,
+    details: log.reference_id ? `Ref ID: ${log.reference_id}` : "",
+    timestamp: log.timestamp,
+    type: log.activity_type === "login"
+      ? "success"
+      : log.activity_type || "info",
+    branch: log.branch || "System"
+  }));
 
-      // Date filter
-      const logDate = new Date(log.timestamp);
-      const now = new Date();
-      let matchesDate = true;
+  // ===========================
+  // Filtering
+  // ===========================
+  const filteredLogs = normalizedLogs.filter(log => {
+    const matchesSearch =
+      log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.details.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (selectedDate === 'today') {
-        matchesDate = logDate.toDateString() === now.toDateString();
-      } else if (selectedDate === 'yesterday') {
-        const yesterday = new Date();
-        yesterday.setDate(now.getDate() - 1);
-        matchesDate = logDate.toDateString() === yesterday.toDateString();
-      } else if (selectedDate === 'week') {
-        const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        matchesDate = logDate >= weekStart && logDate <= weekEnd;
-      } else if (selectedDate === 'month') {
-        matchesDate = logDate.getMonth() === now.getMonth() &&
-                      logDate.getFullYear() === now.getFullYear();
-      }
+    const matchesFilter =
+      selectedFilter === 'all' || log.type === selectedFilter;
 
-      return matchesSearch && matchesFilter && matchesDate;
-    });
+    const logDate = new Date(log.timestamp);
+    const now = new Date();
+    let matchesDate = true;
 
+    if (selectedDate === 'today') {
+      matchesDate = logDate.toDateString() === now.toDateString();
+    } else if (selectedDate === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      matchesDate = logDate.toDateString() === yesterday.toDateString();
+    } else if (selectedDate === 'week') {
+      const today = new Date();
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay());
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      matchesDate = logDate >= weekStart && logDate <= weekEnd;
+    } else if (selectedDate === 'month') {
+      matchesDate =
+        logDate.getMonth() === now.getMonth() &&
+        logDate.getFullYear() === now.getFullYear();
+    }
+
+    return matchesSearch && matchesFilter && matchesDate;
+  });
+
+  // ===========================
+  // Stats (FIXED LOGIC)
+  // ===========================
   const activityStats = [
-    { label: 'Total Activities', value: activityLogs.length, color: 'text-blue-600' },
-    { label: 'Success', value: activityLogs.filter(l => l.type === 'success').length, color: 'text-green-600' },
-    { label: 'Warnings', value: activityLogs.filter(l => l.type === 'warning').length, color: 'text-yellow-600' },
-    { label: 'Errors', value: activityLogs.filter(l => l.type === 'error').length, color: 'text-red-600' },
+    { label: 'Total Activities', value: normalizedLogs.length, color: 'text-blue-600' },
+    { label: 'Success', value: normalizedLogs.filter(l => l.type === 'success').length, color: 'text-green-600' },
+    { label: 'Warnings', value: normalizedLogs.filter(l => l.type === 'warning').length, color: 'text-yellow-600' },
+    { label: 'Errors', value: normalizedLogs.filter(l => l.type === 'error').length, color: 'text-red-600' },
   ];
 
+  // ===========================
+  // UI
+  // ===========================
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <div className="mb-6">
@@ -123,7 +183,6 @@ export default function LogsPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-col md:flex-row gap-4">
-        {/* Search */}
         <div className="flex-1 relative">
           <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
           <input
@@ -135,7 +194,6 @@ export default function LogsPage() {
           />
         </div>
 
-        {/* Filter Type */}
         <div className="flex items-center gap-2">
           <Filter size={20} className="text-gray-500" />
           <select
@@ -151,7 +209,6 @@ export default function LogsPage() {
           </select>
         </div>
 
-        {/* Date Filter */}
         <div className="flex items-center gap-2">
           <Calendar size={20} className="text-gray-500" />
           <select
@@ -167,7 +224,6 @@ export default function LogsPage() {
           </select>
         </div>
 
-        {/* Export */}
         <button className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2">
           <Download size={18} />
           Export
@@ -211,9 +267,16 @@ export default function LogsPage() {
                         {log.branch}
                       </span>
                     </td>
-                    <td className="px-6 py-4 flex items-center gap-2 text-sm text-gray-600">
+                    <td className="px-6 py-4 flex items-start gap-2 text-sm text-gray-600">
                       <Clock size={14} />
-                      {log.timestamp}
+                      <div>
+                        <div className="font-medium">
+                          {formatTimestamp(log.timestamp)}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {getTimeAgo(log.timestamp)}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}

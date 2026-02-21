@@ -118,48 +118,24 @@ export default function MenuManagement() {
   };
 
   // ------------------- HANDLE SAVE EDITED ITEM -------------------
-  const handleSaveEditedItem = async (updatedItem) => {
-    try {
-      const formData = new FormData();
-      formData.append("product_name", updatedItem.product_name);
-      formData.append("category_id", parseInt(updatedItem.category_id));
-      formData.append("price", updatedItem.price);
-      formData.append("status", updatedItem.status);
-
-      // If item was declined and edited, set status back to PENDING
-      formData.append("approval_status", updatedItem.approval_status === "DECLINED" ? "PENDING" : updatedItem.approval_status);
-
-      if (updatedItem.file) formData.append("image", updatedItem.file);
-
-      const res = await fetch(`${API_MENU}/${updatedItem.product_id}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Edit item error:", data);
-        alert("Failed to update item.");
-        return;
-      }
-
-      // Update the correct state based on tab
-      if (data.approval_status === "APPROVED" || activeTab === "Menu List") {
-        setMenuItems((prev) =>
-          prev.map((item) => (item.product_id === data.product_id ? data : item))
-        );
-      } else if (activeTab === "Declined List") {
-        setDeclinedItems((prev) =>
-          prev.map((item) => (item.product_id === data.product_id ? data : item))
-        );
-      }
-
-      setEditingItem(null);
-    } catch (err) {
-      console.error("Edit item error:", err);
+  const handleSaveEditedItem = (updatedItem) => {
+    if (activeTab === "Menu List") {
+      setMenuItems(prev =>
+        prev.map(item =>
+          item.product_id === updatedItem.product_id ? updatedItem : item
+        )
+      );
+    } else {
+      setDeclinedItems(prev =>
+        prev.map(item =>
+          item.product_id === updatedItem.product_id ? updatedItem : item
+        )
+      );
     }
+
+    setEditingItem(null);
   };
+
 
   // ------------------- FILTERED ITEMS -------------------
   const filteredItems =
