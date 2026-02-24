@@ -15,7 +15,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
 import DashboardContent from '../components/DashboardContent';
-import MenuManagement from '../components/menu/MenuManagement';
+import MenuManagement from '../components/menu/testingMenuManagement';
 import InventoryManagement from '../components/inventory/testingInventoryManagement';
 import CashierManagement from '../components/cashiers/CashierManagement';
 import LogManagement from '../components/LogManagement';

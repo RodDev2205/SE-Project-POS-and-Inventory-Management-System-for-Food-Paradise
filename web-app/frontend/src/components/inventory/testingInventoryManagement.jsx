@@ -1,49 +1,103 @@
 // InventoryManagement.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AlertTriangle, Plus, Edit } from "lucide-react";
 import AddIngredientModal from "../inventory/models/AddIngredientModal";
+import EditIngredientModal from "../inventory/models/EditIngredientModal";
 
 const InventoryManagement = () => {
-  const [inventory, setInventory] = useState([
-    { inventory_id: 1, item_name: "Rice", quantity: 2, servings_per_unit: 50, total_servings: 100, low_stock_threshold: 20, status: "active" },
-    { inventory_id: 2, item_name: "Chicken", quantity: 1, servings_per_unit: 10, total_servings: 10, low_stock_threshold: 15, status: "active" },
-    { inventory_id: 3, item_name: "Sauce", quantity: 5, servings_per_unit: 30, total_servings: 150, low_stock_threshold: 25, status: "active" },
-  ]);
-
+  const [inventory, setInventory] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedIngredient, setSelectedIngredient] = useState(null);
 
-  const lowStockItems = inventory.filter(item => item.total_servings <= item.low_stock_threshold);
+  // ✅ Fetch ingredients from backend (branch-based)
+  const fetchIngredients = async () => {
+    try {
+      const token = localStorage.getItem("token");
 
-  const handleAddIngredient = (newIngredient) => {
-    // Ensure total_servings is calculated correctly
-    const ingredientWithTotal = {
-      ...newIngredient,
-      total_servings: newIngredient.quantity * newIngredient.servings_per_unit,
-    };
+      console.log("TOKEN:", token);
 
-    setInventory(prev => [
-      ...prev,
-      { ...ingredientWithTotal, inventory_id: Date.now() } // temporary unique ID
-    ]);
+      const response = await fetch(
+        "http://localhost:5200/api/inventory/get-ingredients",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const text = await response.text();
+      console.log("RAW RESPONSE:", text);
+
+      if (!response.ok) {
+        throw new Error(text || "Failed to fetch ingredients");
+      }
+
+      const data = JSON.parse(text);
+      setInventory(data);
+
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // 🔄 Load on mount
+  useEffect(() => {
+    fetchIngredients();
+  }, []);
+
+  // ✅ After adding ingredient → refresh from DB
+  const handleAddIngredient = async (newIngredient) => {
+    // The modal already posts to the backend and provides the created
+    // ingredient (including `inventory_id`). Avoid posting again here —
+    // just merge the returned ingredient into local state.
+    if (!newIngredient) return;
+
+    setInventory((prev) => [newIngredient, ...prev]);
+  };
+
+  const lowStockItems = inventory.filter(
+    (item) => item.total_servings <= item.low_stock_threshold
+  );
+
+  if (loading) {
+    return <div className="p-8">Loading inventory...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 space-y-8 font-sans">
       <div>
-        <h1 className="text-3xl font-bold text-gray-800">Inventory Management</h1>
-        <p className="text-gray-500 mt-1">Overview of ingredient stocks and servings</p>
+        <h1 className="text-3xl font-bold text-gray-800">
+          Inventory Management
+        </h1>
+        <p className="text-gray-500 mt-1">
+          Overview of ingredient stocks and servings
+        </p>
       </div>
 
+      {/* Dashboard Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <DashboardCard title="Total Ingredients" value={inventory.length} />
-        <DashboardCard title="Low Stock Items" value={lowStockItems.length} alert={lowStockItems.length > 0} />
+        <DashboardCard
+          title="Low Stock Items"
+          value={lowStockItems.length}
+          alert={lowStockItems.length > 0}
+        />
       </div>
 
+      {/* Inventory Table */}
       <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-800">Ingredient Stock</h2>
-            <p className="text-sm text-gray-500">Manage raw ingredients and monitor servings availability</p>
+            <h2 className="text-2xl font-semibold text-gray-800">
+              Ingredient Stock
+            </h2>
+            <p className="text-sm text-gray-500">
+              Manage raw ingredients and monitor servings availability
+            </p>
           </div>
 
           <button
@@ -52,14 +106,6 @@ const InventoryManagement = () => {
           >
             <Plus size={18} /> Add Ingredient
           </button>
-        </div>
-
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search ingredient..."
-            className="w-full md:w-80 px-4 py-2.5 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-green-500 focus:outline-none shadow-sm"
-          />
         </div>
 
         <div className="overflow-x-auto">
@@ -74,22 +120,41 @@ const InventoryManagement = () => {
                 <th></th>
               </tr>
             </thead>
+
             <tbody className="text-sm text-gray-700">
               {inventory.map((item) => {
-                const isLow = item.total_servings <= item.low_stock_threshold;
+                const isLow =
+                  item.total_servings <= item.low_stock_threshold;
+
                 return (
-                  <tr key={item.inventory_id} className="border-b last:border-none hover:bg-gray-50 transition">
+                  <tr
+                    key={item.inventory_id}
+                    className="border-b last:border-none hover:bg-gray-50 transition"
+                  >
                     <td className="py-4">
                       <div>
-                        <p className="font-medium text-gray-800">{item.item_name}</p>
-                        <p className="text-xs text-gray-400">Threshold: {item.low_stock_threshold}</p>
+                        <p className="font-medium text-gray-800">
+                          {item.item_name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Threshold: {item.low_stock_threshold}
+                        </p>
                       </div>
                     </td>
+
                     <td>{item.quantity}</td>
                     <td>{item.servings_per_unit}</td>
+
                     <td className="py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`font-semibold ${isLow ? "text-red-600" : "text-gray-800"}`}>{item.total_servings}</span>
+                        <span
+                          className={`font-semibold ${
+                            isLow ? "text-red-600" : "text-gray-800"
+                          }`}
+                        >
+                          {item.total_servings}
+                        </span>
+
                         {isLow && (
                           <span className="text-xs text-red-500 flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-full">
                             <AlertTriangle size={14} /> Low
@@ -97,13 +162,27 @@ const InventoryManagement = () => {
                         )}
                       </div>
                     </td>
+
                     <td>
-                      <span className={`px-4 py-1.5 rounded-full text-xs font-medium ${item.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-600"}`}>
+                      <span
+                        className={`px-4 py-1.5 rounded-full text-xs font-medium ${
+                          item.status === "active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-200 text-gray-600"
+                        }`}
+                      >
                         {item.status}
                       </span>
                     </td>
+
                     <td className="text-right">
-                      <button className="p-2 rounded-xl hover:bg-gray-200 transition">
+                      <button
+                        className="p-2 rounded-xl hover:bg-gray-200 transition"
+                        onClick={() => {
+                          setSelectedIngredient(item);
+                          setIsEditModalOpen(true);
+                        }}
+                      >
                         <Edit size={18} />
                       </button>
                     </td>
@@ -112,9 +191,29 @@ const InventoryManagement = () => {
               })}
             </tbody>
           </table>
+
+          {inventory.length === 0 && (
+            <div className="text-center py-10 text-gray-400">
+              No ingredients found for this branch.
+            </div>
+          )}
         </div>
       </div>
 
+      <EditIngredientModal
+        isOpen={isEditModalOpen}
+        ingredient={selectedIngredient}
+        onClose={() => setIsEditModalOpen(false)}
+        onEdit={(updatedIngredient) => {
+          setInventory((prev) =>
+            prev.map((item) =>
+              item.inventory_id === updatedIngredient.inventory_id
+                ? updatedIngredient
+                : item
+            )
+          );
+        }}
+      />
       <AddIngredientModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -125,9 +224,19 @@ const InventoryManagement = () => {
 };
 
 const DashboardCard = ({ title, value, alert }) => (
-  <div className={`p-6 rounded-2xl shadow-md ${alert ? "bg-red-50" : "bg-white"} hover:shadow-lg transition`}>
+  <div
+    className={`p-6 rounded-2xl shadow-md ${
+      alert ? "bg-red-50" : "bg-white"
+    } hover:shadow-lg transition`}
+  >
     <h3 className="text-gray-500 text-sm">{title}</h3>
-    <p className={`text-2xl font-bold ${alert ? "text-red-600" : "text-gray-800"}`}>{value}</p>
+    <p
+      className={`text-2xl font-bold ${
+        alert ? "text-red-600" : "text-gray-800"
+      }`}
+    >
+      {value}
+    </p>
   </div>
 );
 
