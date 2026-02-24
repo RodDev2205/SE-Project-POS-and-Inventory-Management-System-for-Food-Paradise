@@ -16,7 +16,7 @@ import Header from '../components/Header';
 
 import DashboardContent from '../components/DashboardContent';
 import MenuManagement from '../components/menu/MenuManagement';
-import InventoryManagement from '../components/inventory/InventoryManagement';
+import InventoryManagement from '../components/inventory/testingInventoryManagement';
 import CashierManagement from '../components/cashiers/CashierManagement';
 import LogManagement from '../components/LogManagement';
 import POS from '../components/POSadminContent';
