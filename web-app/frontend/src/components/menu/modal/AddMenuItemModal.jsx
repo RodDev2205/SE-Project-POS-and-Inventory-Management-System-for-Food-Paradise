@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
 
-export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categories, ingredients }) {
+export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categories = [] }) {
   // Note: don't return before hooks — hooks must run consistently
 
   const [modalStep, setModalStep] = useState(1);
@@ -84,11 +84,11 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // decide which ingredients to render (fetched takes precedence)
-  const displayIngredients = fetchedIngredients.length > 0 ? fetchedIngredients : ingredients;
+  // display fetched ingredients (always from API)
+  const displayIngredients = fetchedIngredients;
 
   // display API categories (or fallback to prop if API fetch failed)
-  const displayCategories = localCategories || categories || [];
+  const displayCategories = localCategories.length > 0 ? localCategories : categories || [];
 
   const handleIngredientsScroll = (e) => {
     const el = e.target;

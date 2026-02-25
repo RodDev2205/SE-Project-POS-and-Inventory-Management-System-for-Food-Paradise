@@ -1,94 +1,306 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AddMenuItemModal from "../menu/modal/AddMenuItemModal";
-
-// Dummy Data
-const categories = [
-  { category_id: 1, category_name: "Food" },
-  { category_id: 2, category_name: "Drinks" },
-];
-const ingredients = [
-  { id: 1, name: "Rice" },
-  { id: 2, name: "Chicken" },
-  { id: 3, name: "Vegetables" },
-];
-const menuItemsMock = [
-  { product_id: 1, product_name: "Chicken Rice", category_name: "Food", price: 150 },
-  { product_id: 2, product_name: "Fruit Juice", category_name: "Drinks", price: 80 },
-];
+import EditMenuItemModal from "../menu/modal/EditMenuItemModal";
+import { Edit2, Trash2, Search } from "lucide-react";
 
 export default function MenuManagementUI() {
-  const [menuItems, setMenuItems] = useState(menuItemsMock);
+  const [menuItems, setMenuItems] = useState([]);
+  const [declinedItems, setDeclinedItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState("All Items");
+  const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingDeclined, setEditingDeclined] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("Menu List");
 
-  const filteredItems =
-    activeCategory === "All Items"
-      ? menuItems
-      : menuItems.filter((item) => item.category_name === activeCategory);
+  const API_BASE = "http://localhost:5200/api";
+
+  const fetchDeclinedItems = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/menu/declined`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch declined items");
+      const data = await res.json();
+      setDeclinedItems(data);
+    } catch (err) {
+      console.error("Fetch declined items failed:", err);
+    }
+  };
+
+  const refreshProducts = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/menu`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch products");
+      const data = await res.json();
+      setMenuItems(data);
+    } catch (err) {
+      console.error("Fetch products failed:", err);
+    }
+  };
+
+  // Fetch products from API
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        // guard: require token
+        if (!token) {
+          setError("Not authenticated. Please login.");
+          setLoading(false);
+          return;
+        }
+        // debug: log token presence (never log full token in production)
+        console.debug("fetchProducts: token present", !!token);
+
+        const response = await fetch("http://localhost:5200/api/menu", {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+        if (response.status === 401) {
+          // clear possible invalid token and provide clearer message
+          localStorage.removeItem("token");
+          throw new Error("Unauthorized (401) - token missing or expired. Please login.");
+        }
+        if (!response.ok) throw new Error("Failed to fetch products");
+        const data = await response.json();
+        setMenuItems(data);
+      } catch (err) {
+        setError(err.message);
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("http://localhost:5200/api/categories");
+        if (!response.ok) throw new Error("Failed to fetch categories");
+        const data = await response.json();
+        setCategories(data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchProducts();
+    fetchCategories();
+  }, []);
+
+  const filteredItems = menuItems.filter((item) => {
+    const matchesCategory =
+      activeCategory === "All Items" ||
+      item.category_name === activeCategory;
+    const matchesSearch =
+      item.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category_name.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   const handleAddItem = (item) => {
     console.log("New Item:", item);
-    setMenuItems((prev) => [
-      ...prev,
-      {
-        product_id: prev.length + 1,
-        product_name: item.product_name,
-        category_name: categories.find((c) => c.category_id == item.category_id)?.category_name,
-        price: item.price,
+    // Refresh products after adding new item
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:5200/api/menu", {
+      headers: {
+        "Authorization": `Bearer ${token}`,
       },
-    ]);
+    })
+      .then((res) => res.json())
+      .then((data) => setMenuItems(data))
+      .catch((err) => console.error(err));
+  };
+
+  const handleEdit = (item) => {
+    setSelectedItem(item);
+    setEditingDeclined(false);
+    setIsEditOpen(true);
+  };
+
+  const handleDelete = (productId) => {
+    if (window.confirm("Are you sure you want to delete this item?")) {
+      const token = localStorage.getItem("token");
+      fetch(`http://localhost:5200/api/menu/${productId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      })
+        .then((res) => {
+          if (res.ok) {
+            setMenuItems((prev) => prev.filter((item) => item.product_id !== productId));
+          } else {
+            alert("Failed to delete item");
+          }
+        })
+        .catch((err) => console.error(err));
+    }
   };
 
   return (
     <div className="space-y-8 p-6">
-      <h2 className="text-3xl font-bold">Menu Management</h2>
-
-      {/* Add New Item Button */}
-      <button
-        onClick={() => setIsAddModalOpen(true)}
-        className="bg-green-600 text-white px-6 py-2 rounded-full hover:bg-green-700 transition"
-      >
-        + Add New Menu Item
-      </button>
-
-      {/* CATEGORY FILTER */}
-      <div className="flex flex-wrap bg-white p-4 rounded-xl shadow-md gap-3 mt-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold">Menu Management</h2>
         <button
-          onClick={() => setActiveCategory("All Items")}
-          className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-            activeCategory === "All Items" ? "bg-green-600 text-white" : "bg-gray-100 hover:bg-green-100"
-          }`}
+          onClick={() => setIsAddModalOpen(true)}
+          className="bg-green-600 text-white px-6 py-2 rounded-full hover:bg-green-700 transition"
         >
-          All Items ({filteredItems.length})
+          + Add New Menu Item
         </button>
-        {categories.map((cat) => {
-          const count = filteredItems.filter((item) => item.category_name === cat.category_name).length;
-          return (
-            <button
-              key={cat.category_id}
-              onClick={() => setActiveCategory(cat.category_name)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                activeCategory === cat.category_name ? "bg-green-600 text-white" : "bg-gray-100 hover:bg-green-100"
-              }`}
-            >
-              {cat.category_name} ({count})
-            </button>
-          );
-        })}
       </div>
 
-      {/* MENU GRID */}
+      {/* Tabs */}
+      <div className="flex gap-2 mt-4 mb-2">
+        {['Menu List', 'Declined'].map((t) => (
+          <button
+            key={t}
+            onClick={() => { setActiveTab(t); if (t === 'Declined') fetchDeclinedItems(); }}
+            className={`px-4 py-2 rounded ${activeTab === t ? 'bg-green-600 text-white' : 'bg-white border'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* SEARCH BAR & CATEGORY DROPDOWN */}
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl shadow-md">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search by product name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+          <select
+            value={activeCategory}
+            onChange={(e) => setActiveCategory(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          >
+            <option value="All Items">All Items</option>
+            {categories.map((cat) => (
+              <option key={cat.category_id} value={cat.category_name}>
+                {cat.category_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-4">
-        {filteredItems.length > 0 ? (
-          filteredItems.map((item) => (
-            <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl">
-              <h3 className="font-semibold text-lg">{item.product_name}</h3>
-              <p className="text-sm text-gray-500">{item.category_name}</p>
-              <p className="text-green-600 font-bold">₱{item.price}</p>
-            </div>
-          ))
+        {loading ? (
+          <p className="text-center col-span-4 text-gray-500 py-10">Loading...</p>
+        ) : error ? (
+          <p className="text-center col-span-4 text-red-500 py-10">Error: {error}</p>
+        ) : activeTab === 'Menu List' ? (
+          filteredItems.length > 0 ? (
+            filteredItems.map((item) => (
+              <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
+                {item.image_path && (
+                  <img 
+                    src={`http://localhost:5200${item.image_path}`} 
+                    alt={item.product_name}
+                    className="w-full h-48 object-cover rounded-lg mb-3"
+                  />
+                )}
+                <h3 className="font-semibold text-lg">{item.product_name}</h3>
+                <p className="text-sm text-gray-500">{item.category_name}</p>
+                <p className="text-green-600 font-bold">₱{item.price}</p>
+                <div className="mt-2 text-xs space-y-1 mb-4">
+                  <p className="text-gray-600">Status: <span className="font-medium">{item.status}</span></p>
+                  <p className="text-gray-600">POS Status: <span className="font-medium">{item.menu_status}</span></p>
+                </div>
+
+                <div className="mt-auto flex gap-2">
+                  <button
+                    onClick={() => handleEdit(item)}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded transition font-medium flex items-center justify-center gap-2"
+                    title="Edit item"
+                  >
+                    <Edit2 size={16} />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.product_id)}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded transition font-medium flex items-center justify-center gap-2"
+                    title="Delete item"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center col-span-4 text-gray-500 py-10">No items found</p>
+          )
         ) : (
-          <p className="text-center col-span-4 text-gray-500 py-10">No items found</p>
+          // Declined tab content
+          (declinedItems.length > 0 ? (
+            declinedItems.map((item) => (
+              <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
+                {item.image_path && (
+                  <img 
+                    src={`http://localhost:5200${item.image_path}`} 
+                    alt={item.product_name}
+                    className="w-full h-48 object-cover rounded-lg mb-3"
+                  />
+                )}
+                <h3 className="font-semibold text-lg">{item.product_name}</h3>
+                <p className="text-sm text-gray-500">{item.category_name}</p>
+                <p className="text-green-600 font-bold">₱{item.price}</p>
+                <div className="mt-2 text-xs space-y-1 mb-4">
+                  <p className="text-gray-600">Status: <span className="font-medium">{item.status}</span></p>
+                  <p className="text-gray-600">Approval: <span className="font-medium">{item.approval_status}</span></p>
+                  {item.reviewed_by && <p className="text-gray-600">Reviewed by: <span className="font-medium">{item.reviewed_by}</span></p>}
+                  {item.decline_reason && <p className="text-red-600 text-xs">Reason: <span className="font-medium">{item.decline_reason}</span></p>}
+                </div>
+
+                <div className="mt-auto flex gap-2">
+                  <button
+                    onClick={() => { setSelectedItem(item); setEditingDeclined(true); setIsEditOpen(true); }}
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded transition font-medium flex items-center justify-center gap-2"
+                    title="Edit declined item"
+                  >
+                    <Edit2 size={16} />
+                    Edit / Resubmit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(item.product_id)}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded transition font-medium flex items-center justify-center gap-2"
+                    title="Delete item"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center col-span-4 text-gray-500 py-10">No declined items</p>
+          ))
         )}
       </div>
 
@@ -98,7 +310,19 @@ export default function MenuManagementUI() {
         onClose={() => setIsAddModalOpen(false)}
         onAddItem={handleAddItem}
         categories={categories}
-        ingredients={ingredients}
+      />
+      <EditMenuItemModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        onSaved={() => {
+          // refresh lists after save
+          refreshProducts();
+          fetchDeclinedItems();
+          setIsEditOpen(false);
+        }}
+        item={selectedItem}
+        categories={categories}
+        declined={editingDeclined}
       />
     </div>
   );

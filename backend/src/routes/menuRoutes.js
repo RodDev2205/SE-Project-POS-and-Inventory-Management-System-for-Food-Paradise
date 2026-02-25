@@ -4,6 +4,7 @@ import {
   createProduct, 
   updateProduct, 
   deleteProduct, 
+  getMenuInventoryByProduct,
   upload 
 } from "../controllers/menuController.js";
 import { getDeclinedProducts, editDeclinedProduct } from "../controllers/menuController.js";
@@ -13,6 +14,7 @@ import { requireRole } from "../middlewares/requireRole.js";
 const router = express.Router();
 
 router.get("/", verifyToken, requireRole(2, 1), getAllProducts);
+router.get("/:product_id/inventory", verifyToken, requireRole(2, 1), getMenuInventoryByProduct);
 router.post("/", verifyToken, requireRole(2, 1), upload.single("image"), createProduct);
 router.put("/:id", verifyToken, requireRole(2, 1), upload.single("image"), updateProduct);
 router.delete("/:id", verifyToken, requireRole(2, 1), deleteProduct);
