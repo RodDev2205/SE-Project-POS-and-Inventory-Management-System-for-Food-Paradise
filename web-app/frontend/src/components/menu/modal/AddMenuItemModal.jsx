@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
 
 export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categories, ingredients }) {
-  // Early return BEFORE any hooks
-  if (!isOpen) return null;
+  // Note: don't return before hooks — hooks must run consistently
 
   const [modalStep, setModalStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -18,6 +17,30 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     ingredients: [],
   });
   const [filePreview, setFilePreview] = useState(null);
+
+  // Ingredients from API with pagination (infinite scroll)
+  const [fetchedIngredients, setFetchedIngredients] = useState([]);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingIngredients, setLoadingIngredients] = useState(false);
+
+  // Categories from API (always fetch for fresh database data)
+  const [localCategories, setLocalCategories] = useState([]);
+  const API_CATEGORIES = "http://localhost:5200/api/categories";
+
+  const fetchCategories = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_CATEGORIES, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Failed to load categories");
+      const data = await res.json();
+      setLocalCategories(data || []);
+    } catch (err) {
+      console.error("Categories fetch failed:", err);
+      // silently fall back to prop categories if API fails
+    }
+  };
 
   const productNameRef = useRef(null);
 
@@ -41,6 +64,41 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [modalStep, loading, newItem]);
 
+  // when entering step 2 (link ingredients) fetch first page
+  useEffect(() => {
+    if (isOpen && modalStep === 2) {
+      // reset and fetch
+      setFetchedIngredients([]);
+      setPage(1);
+      setHasMore(true);
+      fetchIngredients(1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, modalStep]);
+
+  // fetch categories from API when modal opens (always get fresh data from DB)
+  useEffect(() => {
+    if (isOpen) {
+      fetchCategories();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // decide which ingredients to render (fetched takes precedence)
+  const displayIngredients = fetchedIngredients.length > 0 ? fetchedIngredients : ingredients;
+
+  // display API categories (or fallback to prop if API fetch failed)
+  const displayCategories = localCategories || categories || [];
+
+  const handleIngredientsScroll = (e) => {
+    const el = e.target;
+    if (!hasMore || loadingIngredients) return;
+    // near bottom
+    if (el.scrollHeight - el.scrollTop <= el.clientHeight + 40) {
+      fetchIngredients(page + 1);
+    }
+  };
+
   // File preview URL - SINGLE useEffect
   useEffect(() => {
     let url = null;
@@ -60,6 +118,10 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     setModalStep(1);
     setError("");
     setSuccess(false);
+    // reset ingredient pagination
+    setFetchedIngredients([]);
+    setPage(1);
+    setHasMore(true);
     onClose();
   };
 
@@ -71,11 +133,107 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     setModalStep(2);
   };
 
+  // Fetch ingredients from API (uses pagination when page & limit provided)
+  const fetchIngredients = async (pageToLoad = 1) => {
+    if (loadingIngredients) return;
+    setLoadingIngredients(true);
+    try {
+      const token = localStorage.getItem("token");
+      const API_INVENTORY = "http://localhost:5200/api/inventory";
+      const res = await fetch(`${API_INVENTORY}/get-ingredients?page=${pageToLoad}&limit=${limit}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const text = await res.text();
+
+      // Try to parse JSON; if response is HTML (e.g. index.html or an auth redirect), surface a clear error
+      let data;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        const snippet = text ? text.slice(0, 200) : '';
+        throw new Error(`Invalid JSON response from server: ${snippet}`);
+      }
+
+      if (!res.ok) {
+        const msg = (data && data.message) || (data && data.error) || res.statusText || 'Failed to load ingredients';
+        throw new Error(msg);
+      }
+
+      // backend returns paginated shape { data, total, currentPage, totalPages } or an array
+      let items = [];
+      let more = false;
+
+      if (Array.isArray(data)) {
+        items = data;
+        more = false;
+      } else if (data && data.data) {
+        items = data.data;
+        more = data.currentPage < data.totalPages;
+      }
+
+      // normalize to { id, name }
+      const normalized = items.map((i) => ({ id: i.inventory_id ?? i.id ?? i.item_id ?? i.itemId ?? i.id, name: i.item_name ?? i.name ?? i.itemName ?? '' }));
+
+      if (pageToLoad === 1) {
+        setFetchedIngredients(normalized);
+      } else {
+        setFetchedIngredients((prev) => [...prev, ...normalized]);
+      }
+
+      setHasMore(more);
+      setPage(pageToLoad);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to load ingredients");
+    } finally {
+      setLoadingIngredients(false);
+    }
+  };
+
   const handleAdd = async () => {
     setError("");
     setLoading(true);
 
     try {
+      const token = localStorage.getItem("token");
+      const API_MENU = "http://localhost:5200/api/menu";
+
+      // Build FormData for multipart/form-data (file + JSON fields)
+      const formData = new FormData();
+      formData.append("product_name", newItem.product_name.trim());
+      formData.append("category_id", newItem.category_id);
+      formData.append("price", parseFloat(newItem.price));
+      if (newItem.file) {
+        formData.append("image", newItem.file);
+      }
+      // Add ingredients as JSON array
+      formData.append("ingredients", JSON.stringify(newItem.ingredients));
+
+      const res = await fetch(API_MENU, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const text = await res.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (parseErr) {
+        throw new Error("Invalid response from server");
+      }
+
+      if (!res.ok) {
+        const msg = (data && data.message) || (data && data.error) || "Failed to create product";
+        throw new Error(msg);
+      }
+
+      // Success: call parent callback and close modal
       onAddItem(newItem);
       setSuccess(true);
       setTimeout(() => {
@@ -83,6 +241,7 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
         handleClose();
       }, 1000);
     } catch (err) {
+      console.error(err);
       setError(err.message || "Failed to add product");
     } finally {
       setLoading(false);
@@ -94,6 +253,8 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     center: { x: 0, opacity: 1 },
     exit: { x: -100, opacity: 0 },
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -186,9 +347,13 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
                   className="w-full border border-gray-200 p-3 rounded-2xl focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.category_id} value={cat.category_id}>{cat.category_name}</option>
-                  ))}
+                  {displayCategories && displayCategories.length > 0 ? (
+                    displayCategories.map((cat) => (
+                      <option key={cat.category_id} value={cat.category_id}>{cat.category_name}</option>
+                    ))
+                  ) : (
+                    <option disabled>No categories available</option>
+                  )}
                 </select>
               </div>
 
@@ -260,9 +425,9 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
                 Select ingredients for <span className="font-semibold text-gray-800">{newItem.product_name}</span>
               </p>
 
-              <div className="max-h-72 overflow-y-auto space-y-3 border border-gray-200 rounded-2xl p-4 bg-gray-50">
-                {ingredients.length > 0 ? (
-                  ingredients.map((ing) => {
+              <div onScroll={handleIngredientsScroll} className="max-h-72 overflow-y-auto space-y-3 border border-gray-200 rounded-2xl p-4 bg-gray-50">
+                {displayIngredients.length > 0 ? (
+                  displayIngredients.map((ing) => {
                     const ingQty = newItem.ingredients.find((i) => i.id === ing.id)?.quantity || "";
                     return (
                       <div key={ing.id} className="flex items-center gap-4 p-3 bg-white rounded-xl border border-gray-100 hover:border-green-300 transition">
@@ -302,6 +467,10 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
                   })
                 ) : (
                   <p className="text-sm text-gray-500 text-center py-8">No ingredients available</p>
+                )}
+
+                {loadingIngredients && (
+                  <div className="w-full text-center py-3 text-sm text-gray-600">Loading...</div>
                 )}
               </div>
 

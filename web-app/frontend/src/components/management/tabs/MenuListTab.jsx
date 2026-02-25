@@ -9,9 +9,12 @@ export default function MenuListTab() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [linkedIngredients, setLinkedIngredients] = useState([]);
+  const [loadingIngredients, setLoadingIngredients] = useState(false);
 
   const ITEMS_PER_PAGE = 8;
   const API_URL = "http://localhost:5200/api/menu-superadmin/products";
+  const API_MENU_INVENTORY = "http://localhost:5200/api/menu-superadmin/menu-inventory";
 
   // 🔹 Fetch from backend
   useEffect(() => {
@@ -108,6 +111,27 @@ export default function MenuListTab() {
     setPage(1);
   };
 
+  const fetchLinkedIngredients = async (productId) => {
+    try {
+      setLoadingIngredients(true);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_MENU_INVENTORY}/${productId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch ingredients");
+      const data = await res.json();
+      setLinkedIngredients(data || []);
+    } catch (err) {
+      console.error("Failed to fetch linked ingredients:", err);
+      setLinkedIngredients([]);
+    } finally {
+      setLoadingIngredients(false);
+    }
+  };
+
   return (
     <>
       {/* Search + Filter */}
@@ -192,6 +216,7 @@ export default function MenuListTab() {
             onClick={() => {
               setSelectedProduct(item);
               setNote(item.decline_reason || "");
+              fetchLinkedIngredients(item.product_id);
             }}
             className="bg-white rounded-lg shadow-md p-6 border hover:shadow-lg transition cursor-pointer"
           >
@@ -293,7 +318,24 @@ export default function MenuListTab() {
                     </p>
                   )}
                 </div>
-
+                {/* Linked Ingredients */}
+                <div className="border-t pt-3">
+                  <h4 className="font-medium text-gray-800 mb-2">Linked Ingredients:</h4>
+                  {loadingIngredients ? (
+                    <p className="text-sm text-gray-500">Loading ingredients...</p>
+                  ) : linkedIngredients.length > 0 ? (
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {linkedIngredients.map((ing, idx) => (
+                        <div key={idx} className="bg-gray-100 p-2 rounded text-sm">
+                          <p className="font-medium text-gray-800">{ing.item_name}</p>
+                          <p className="text-gray-600">Servings Required: {ing.servings_required}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No ingredients linked</p>
+                  )}
+                </div>
                 {selectedProduct.decline_reason && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
                     <span className="font-medium">Decline Reason:</span>
@@ -319,6 +361,7 @@ export default function MenuListTab() {
                     onClick={() => {
                         setSelectedProduct(null);
                         setNote("");
+                        setLinkedIngredients([]);
                     }}
                     className="px-4 py-2 border rounded-lg hover:bg-gray-100 cursor-pointer"
                     >

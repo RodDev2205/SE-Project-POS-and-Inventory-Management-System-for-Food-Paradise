@@ -78,3 +78,29 @@ export const getMenuApprovedByBranch = async (req, res) => {
   }
 };
 
+export const getMenuInventorybyid = async (req, res) => {
+  try {
+    const { product_id } = req.params;
+
+    const [rows] = await db.query(
+      `SELECT 
+        mi.product_id,
+        mi.inventory_id,
+        mi.servings_required,
+        i.item_name,
+        i.quantity,
+        i.total_servings
+       FROM menu_inventory mi
+       JOIN inventory i ON mi.inventory_id = i.inventory_id
+       WHERE mi.product_id = ?`,
+      [product_id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+

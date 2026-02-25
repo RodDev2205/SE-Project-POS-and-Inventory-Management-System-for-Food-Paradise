@@ -41,41 +41,63 @@ export const getAllProducts = async (req, res) => {
 // CREATE product
 // -------------------
 export const createProduct = async (req, res) => {
+  const connection = await db.getConnection();
+  
   try {
-    // Make sure the user is authenticated
-    if (!req.user || !req.user.user_id || !req.user.branch_id) {
-      return res.status(401).json({ error: "Unauthorized: user info missing" });
+    await connection.beginTransaction();
+
+    if (!req.user?.user_id || !req.user?.branch_id) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { product_name, category_id, price } = req.body;
+    let { product_name, category_id, price, ingredients } = req.body;
     const created_by = req.user.user_id;
     const branch_id = req.user.branch_id;
+
+    // Parse ingredients if it comes as a JSON string (from FormData)
+    if (typeof ingredients === 'string') {
+      try {
+        ingredients = JSON.parse(ingredients);
+      } catch (e) {
+        ingredients = [];
+      }
+    }
 
     const image_name = req.file ? req.file.originalname : null;
     const image_path = req.file ? `/uploads/${req.file.filename}` : null;
 
-    const [result] = await db.query(
+    // 1️⃣ Insert product first
+    const [result] = await connection.query(
       `INSERT INTO products 
-       (product_name, category_id, price, image_name, image_path, created_by, branch_id, approval_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (product_name, category_id, price, image_name, image_path, created_by, branch_id, approval_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [product_name, category_id, price, image_name, image_path, created_by, branch_id, 'PENDING']
     );
 
-    res.status(201).json({
-      product_id: result.insertId,
-      product_name,
-      category_id,
-      price,
-      status: "available",
-      image_name,
-      image_path,
-      created_by,
-      branch_id,
-      approval_status: 'PENDING'
-    });
+    const productId = result.insertId;
+
+    // 2️⃣ Insert product ingredients (if any)
+    if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
+      for (const ing of ingredients) {
+        await connection.query(
+          `INSERT INTO menu_inventory 
+          (product_id, inventory_id, servings_required)
+          VALUES (?, ?, ?)`,
+          [productId, ing.id, ing.quantity]
+        );
+      }
+    }
+
+    await connection.commit();
+
+    res.status(201).json({ message: "Product created successfully", product_id: productId });
+
   } catch (err) {
+    await connection.rollback();
     console.error(err);
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
