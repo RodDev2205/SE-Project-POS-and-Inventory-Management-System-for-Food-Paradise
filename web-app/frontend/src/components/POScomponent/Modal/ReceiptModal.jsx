@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
-export default function ReceiptModal({ orderId, total, cart, onClose }) {
-  const [given, setGiven] = useState("");
-  const [orderType, setOrderType] = useState("Dine-in");
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
+export default function ReceiptModal({
+  transactionId,
+  transactionNumber,
+  total,
+  change,
+  cart,
+  onClose,
+}) {
   const [showSuccess, setShowSuccess] = useState(false);
-
-  const change = given ? (parseFloat(given) - total).toFixed(2) : "0.00";
 
   const handlePrint = async () => {
     const payload = {
-      orderId,
+      transactionId,
+      transactionNumber,
       cart,
       total,
-      given,
       change,
-      orderType,
-      paymentMethod,
       date: new Date().toLocaleString(),
     };
 
@@ -48,18 +48,14 @@ export default function ReceiptModal({ orderId, total, cart, onClose }) {
 
   return (
     <div className="relative space-y-4 w-full">
-
       {/* ✅ SUCCESS POPUP */}
       {showSuccess && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-50">
-          <div className="bg-white px-6 py-4 rounded-lg shadow-lg text-center
-                          animate-fade-in">
+          <div className="bg-white px-6 py-4 rounded-lg shadow-lg text-center animate-fade-in">
             <h2 className="text-green-600 text-lg font-bold">
               ✅ Receipt Printed
             </h2>
-            <p className="text-sm text-gray-600">
-              Closing receipt...
-            </p>
+            <p className="text-sm text-gray-600">Closing receipt...</p>
           </div>
         </div>
       )}
@@ -73,89 +69,53 @@ export default function ReceiptModal({ orderId, total, cart, onClose }) {
 
       <div className="border-b pb-2">
         <div className="flex justify-between text-sm mb-1">
-          <span>Receipt #{orderId}</span>
+          <span className="font-bold">{transactionNumber}</span>
           <span>{new Date().toLocaleDateString()}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span>Order Type: {orderType}</span>
-          <span>Payment: {paymentMethod}</span>
-        </div>
+        <p className="text-xs text-gray-500">Transaction ID: {transactionId}</p>
       </div>
 
       <div className="space-y-1">
         {cart.map((item, idx) => (
           <div key={idx} className="flex justify-between text-sm">
-            <span>{item.qty} x {item.item}</span>
+            <span>
+              {item.qty} x {item.item || item.product_name}
+            </span>
             <span>₱ {(item.qty * item.price).toFixed(2)}</span>
           </div>
         ))}
       </div>
 
       <div className="border-t pt-2 space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span>Subtotal:</span>
-          <span>₱ {total.toFixed(2)}</span>
-        </div>
-
-        {paymentMethod === "Cash" && (
-          <>
-            <div className="flex justify-between">
-              <span>Given:</span>
-              <span>₱ {given || "0.00"}</span>
-            </div>
-            <div className="flex justify-between font-bold">
-              <span>Change:</span>
-              <span>₱ {change}</span>
-            </div>
-          </>
-        )}
-
         <div className="flex justify-between font-bold text-base">
           <span>Total:</span>
           <span>₱ {total.toFixed(2)}</span>
         </div>
+
+        <div className="flex justify-between font-bold text-green-600">
+          <span>Change:</span>
+          <span>₱ {change.toFixed(2)}</span>
+        </div>
       </div>
 
-      {paymentMethod === "Cash" && (
-        <input
-          type="number"
-          className="w-full border rounded p-2"
-          placeholder="Enter Given Amount"
-          value={given}
-          onChange={(e) => setGiven(e.target.value)}
-        />
-      )}
-
-      <div className="flex gap-2">
-        <select
-          className="flex-1 border rounded p-2"
-          value={orderType}
-          onChange={(e) => setOrderType(e.target.value)}
-        >
-          <option>Dine-in</option>
-          <option>Take-out</option>
-          <option>Delivery</option>
-        </select>
-
-        <select
-          className="flex-1 border rounded p-2"
-          value={paymentMethod}
-          onChange={(e) => setPaymentMethod(e.target.value)}
-        >
-          <option>Cash</option>
-          <option>Online</option>
-        </select>
+      <div className="bg-green-50 border border-green-200 rounded p-3">
+        <p className="text-center text-sm text-green-700 font-semibold">
+          ✅ Payment Successful
+        </p>
+        <p className="text-center text-xs text-gray-600 mt-1">
+          {new Date().toLocaleTimeString()}
+        </p>
       </div>
 
       <div className="flex gap-2 mt-2">
         <button
-          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg"
+          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition-colors"
           onClick={handlePrint}
         >
-          Print Receipt
+          🖨️ Print Receipt
         </button>
         <button
-          className="flex-1 bg-gray-300 hover:bg-gray-400 font-bold py-2 rounded-lg"
+          className="flex-1 bg-gray-300 hover:bg-gray-400 font-bold py-2 rounded-lg transition-colors"
           onClick={onClose}
         >
           Close

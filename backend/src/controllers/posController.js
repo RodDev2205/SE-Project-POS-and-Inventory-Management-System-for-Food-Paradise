@@ -1,10 +1,22 @@
 import { db } from "../config/db.js";
 
+// Helper function to generate unique transaction number
+const generateTransactionNumber = () => {
+  const timestamp = Date.now().toString().slice(-8);
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `TXN-${timestamp}-${random}`;
+};
+
 export const completeSale = async (req, res) => {
-  const { cart } = req.body;
+  const { cart, paymentMethod, amountPaid, discount } = req.body;
+  const user = req.user; // From JWT token
 
   if (!cart || cart.length === 0) {
     return res.status(400).json({ success: false, message: "Cart is empty" });
+  }
+
+  if (!paymentMethod || !amountPaid) {
+    return res.status(400).json({ success: false, message: "Payment details required" });
   }
 
   const connection = await db.getConnection();
@@ -12,109 +24,173 @@ export const completeSale = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // Check stock for all items first
+    let subtotal = 0;
+    const transactionItemsData = [];
+    const ingredientDeductions = new Map(); // Track ingredient deductions needed
+
+    // ==================== STEP 1: Validate all items and collect ingredient needs ====================
     for (const item of cart) {
-      const portionName = `${item.item} Portion`;
-
-      // Get portion formula JSON   
-      const [portionRows] = await connection.query(
-        "SELECT formula_json FROM `portions` WHERE portion_name = ?",
-        [portionName]
-      );
-
-      if (!portionRows.length) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: `Portion formula not found for ${item.item}`,
-        });
-      }
-
-      const formula = JSON.parse(portionRows[0].formula_json); // array of { raw_item_id, qty }
-
-      // Check stock for each ingredient
-      for (const ingredient of formula) {
-        const [stockRows] = await connection.query(
-          "SELECT quantity FROM raw_items WHERE raw_item_id = ?",
-          [ingredient.raw_item_id]
-        );
-
-        if (!stockRows.length || stockRows[0].quantity < ingredient.qty * item.qty) {
-          await connection.rollback();
-          return res.status(400).json({
-            success: false,
-            message: `Not enough stock for ingredient ID ${ingredient.raw_item_id} (${item.item})`,
-          });
-        }
-      }
-    }
-
-    // Deduct stock and prepare for order insertion
-    let totalAmount = 0;
-    const orderItemsData = [];
-
-    for (const item of cart) {
-      const portionName = `${item.item} Portion`;
-
-      // Get portion formula JSON again
-      const [portionRows] = await connection.query(
-        "SELECT formula_json FROM `portions` WHERE portion_name = ?",
-        [portionName]
-      );
-
-      const formula = JSON.parse(portionRows[0].formula_json);
-
-      // Deduct ingredients
-      for (const ingredient of formula) {
-        await connection.query(
-          "UPDATE raw_items SET quantity = quantity - ? WHERE raw_item_id = ?",
-          [ingredient.qty * item.qty, ingredient.raw_item_id]
-        );
-      }
-
       // Get product_id and price from products table
       const [productRows] = await connection.query(
-        "SELECT product_id, price FROM products WHERE product_name = ?",
-        [item.item]
+        `SELECT product_id, price FROM products WHERE product_id = ?`,
+        [item.product_id]
       );
 
       if (!productRows.length) {
         await connection.rollback();
         return res.status(400).json({
           success: false,
-          message: `Product not found: ${item.item}`,
+          message: `Product not found for product_id: ${item.product_id}`,
         });
       }
 
-      const productId = productRows[0].product_id;
       const price = Number(productRows[0].price);
+      const itemTotal = price * item.qty;
+      subtotal += itemTotal;
 
-      totalAmount += price * item.qty;
-      orderItemsData.push({ productId, quantity: item.qty });
+      transactionItemsData.push({
+        menu_id: item.product_id,
+        quantity: item.qty,
+        price: price,
+        total: itemTotal,
+      });
+
+      // ✅ Get linked ingredients from menu_inventory table
+      const [ingredientRows] = await connection.query(
+        `SELECT inventory_id, servings_required 
+         FROM menu_inventory 
+         WHERE product_id = ?`,
+        [item.product_id]
+      );
+
+      // ❌ Check if product has any linked ingredients
+      if (!ingredientRows || ingredientRows.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Product "${item.item || item.product_id}" has no linked ingredients. Please set up ingredients for this product.`,
+        });
+      }
+
+      // Collect ingredient deductions
+      for (const ingredient of ingredientRows) {
+        const servingsNeeded = ingredient.servings_required * item.qty;
+        const key = ingredient.inventory_id;
+
+        if (ingredientDeductions.has(key)) {
+          ingredientDeductions.set(key, ingredientDeductions.get(key) + servingsNeeded);
+        } else {
+          ingredientDeductions.set(key, servingsNeeded);
+        }
+      }
     }
 
-    // Insert order
-    const [orderResult] = await connection.query(
-      "INSERT INTO orders (order_date, total_amount) VALUES (NOW(), ?)",
-      [totalAmount]
-    );
-    const orderId = orderResult.insertId;
+    // ==================== STEP 2: Check if enough servings in inventory ====================
+    for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
+      const [inventoryRows] = await connection.query(
+        `SELECT item_name, total_servings FROM inventory WHERE inventory_id = ?`,
+        [inventoryId]
+      );
 
-    // Insert order items
-    for (const orderItem of orderItemsData) {
+      if (!inventoryRows.length) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Inventory item not found for ID: ${inventoryId}`,
+        });
+      }
+
+      const inventory = inventoryRows[0];
+
+      if (inventory.total_servings < servingsNeeded) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for "${inventory.item_name}". Available: ${inventory.total_servings}, Needed: ${servingsNeeded}`,
+        });
+      }
+    }
+
+    // ==================== STEP 3: Calculate transaction amounts ====================
+    const discountObj = discount || { type: "none", value: 0 };
+    let discountAmount = 0;
+
+    if (discountObj.type === "percentage") {
+      discountAmount = (subtotal * discountObj.value) / 100;
+    } else if (discountObj.type === "fixed") {
+      discountAmount = discountObj.value;
+    }
+
+    const totalAmount = subtotal - discountAmount;
+    const changeAmount = Number(amountPaid) - totalAmount;
+
+    if (changeAmount < 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient payment. Total: ${totalAmount}, Paid: ${amountPaid}`,
+      });
+    }
+
+    // ==================== STEP 4: Deduct servings from inventory ====================
+    for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
       await connection.query(
-        "INSERT INTO order_items (order_id, product_id, quantity) VALUES (?, ?, ?)",
-        [orderId, orderItem.productId, orderItem.quantity]
+        `UPDATE inventory 
+         SET total_servings = total_servings - ?
+         WHERE inventory_id = ?`,
+        [servingsNeeded, inventoryId]
+      );
+    }
+
+    // ==================== STEP 5: Create transaction record ====================
+    const transactionNumber = generateTransactionNumber();
+
+    const [transactionResult] = await connection.query(
+      `INSERT INTO transactions 
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        transactionNumber,
+        subtotal,
+        discountObj.type || "none",
+        discountObj.value || 0,
+        discountAmount,
+        totalAmount,
+        paymentMethod,
+        amountPaid,
+        changeAmount,
+        user.user_id,
+        user.branch_id,
+      ]
+    );
+
+    const transactionId = transactionResult.insertId;
+
+    // ==================== STEP 6: Insert transaction items ====================
+    for (const item of transactionItemsData) {
+      await connection.query(
+        `INSERT INTO transaction_items 
+         (transaction_id, menu_id, quantity, price, total)
+         VALUES (?, ?, ?, ?, ?)`,
+        [transactionId, item.menu_id, item.quantity, item.price, item.total]
       );
     }
 
     await connection.commit();
-    res.json({ success: true, message: "Sale completed and inventory updated!",orderId: orderId });
+
+    res.json({
+      success: true,
+      message: "Sale completed and inventory updated!",
+      transactionId: transactionId,
+      transactionNumber: transactionNumber,
+      totalAmount: totalAmount,
+      changeAmount: changeAmount,
+    });
 
   } catch (error) {
     await connection.rollback();
-    console.error(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("POS Error:", error);
+    res.status(500).json({ success: false, message: "Server error: " + error.message });
   } finally {
     connection.release();
   }

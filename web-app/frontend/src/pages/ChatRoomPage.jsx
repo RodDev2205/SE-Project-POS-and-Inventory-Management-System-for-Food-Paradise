@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-import { Send, LogOut, Users } from "lucide-react";
+import { Send, LogOut, Users, Link } from "lucide-react";
 import { jwtDecode } from "jwt-decode";
 
 export default function ChatRoom() {
@@ -8,6 +8,8 @@ export default function ChatRoom() {
   const [activeBranchId, setActiveBranchId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
+  const [file, setFile] = useState(null);
+  const [attachmentName, setAttachmentName] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const socketRef = useRef(null);
@@ -130,21 +132,61 @@ export default function ChatRoom() {
   }, [messages]);
 
   // ======== SEND MESSAGE ========
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!message.trim() || !activeBranchId) {
-      console.warn("Message empty or no branch selected");
+    if ((!message.trim() && !file) || !activeBranchId) {
+      console.warn("Nothing to send or no branch selected");
       return;
     }
 
-    console.log("📤 Sending message:", message);
+    let attachment_url = null;
+    let message_type = "text";
+    let attachment_name = attachmentName || null;
 
-    socketRef.current.emit("sendMessage", {
+    // if a file is selected, upload first
+    if (file) {
+      try {
+        const token = localStorage.getItem("token");
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("http://localhost:5200/api/chat/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+        if (!res.ok) {
+          console.error("Upload failed");
+        } else {
+          const data = await res.json();
+          attachment_url = data.url;
+          message_type = data.message_type;
+          // backend may return original name too
+          if (data.attachment_name) attachment_name = data.attachment_name;
+        }
+      } catch (err) {
+        console.error("Error uploading file", err);
+      }
+    }
+
+    const payload = {
       branch_id: activeBranchId,
       message: message.trim(),
-    });
+      message_type,
+      attachment_url,
+      attachment_name,
+    };
+
+    console.log("📤 Sending message:", payload);
+
+    socketRef.current.emit("sendMessage", payload);
 
     setMessage("");
+    setFile(null);
+    setAttachmentName("");
+    // clear file input by resetting form element
+    if (e.target && typeof e.target.reset === 'function') {
+      e.target.reset();
+    }
   };
 
   const activeBranch = branches.find((b) => b.branch_id === activeBranchId) || {};
@@ -208,7 +250,25 @@ export default function ChatRoom() {
                           {msg.full_name || msg.username || "Unknown"}
                         </p>
                       )}
-                      <p className="text-sm break-words">{msg.message}</p>
+                      {/* Display text and/or attachment */}
+                      {msg.message && <p className="text-sm break-words">{msg.message}</p>}
+                      {msg.attachment_url && msg.message_type === 'image' && (
+                        <img
+                          src={`http://localhost:5200${msg.attachment_url}`}
+                          alt="attachment"
+                          className="mt-2 max-w-xs rounded cursor-pointer"
+                          onClick={() => window.open(`http://localhost:5200${msg.attachment_url}`, '_blank')}
+                        />
+                      )}
+                      {msg.attachment_url && msg.message_type === 'file' && (
+                        <a
+                          href={`http://localhost:5200${msg.attachment_url}`}
+                          className="mt-2 inline-block text-blue-600 underline"
+                          download
+                        >
+                          {msg.attachment_name || 'Download file'}
+                        </a>
+                      )}
                       <div className="text-xs mt-1 opacity-70 text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -233,9 +293,22 @@ export default function ChatRoom() {
                 placeholder="Type a message..."
                 className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-sm"
               />
+              <label className="ml-2 cursor-pointer text-gray-500 hover:text-gray-700">
+                <Link className="w-5 h-5" />
+                <input
+                  type="file"
+                  onChange={(e) => {
+                    const f = e.target.files[0] || null;
+                    setFile(f);
+                    setAttachmentName(f ? f.name : "");
+                  }}
+                  className="hidden"
+                />
+              </label>
+              {attachmentName && <span className="text-xs text-gray-600 ml-2">{attachmentName}</span>}
               <button
                 type="submit"
-                disabled={!message.trim() || !activeBranchId}
+                disabled={(!message.trim() && !file) || !activeBranchId}
                 className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />

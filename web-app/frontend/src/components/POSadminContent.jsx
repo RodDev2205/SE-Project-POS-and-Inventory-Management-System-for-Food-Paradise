@@ -4,6 +4,8 @@ import ItemsPanel from "../components/POScomponent/Panel/ItemsPanel";
 import ReceiptPanel from "../components/POScomponent/Panel/ReceiptPanel";
 import ReceiptModal from "../components/POScomponent/Modal/ReceiptModal";
 import VoidTransactionModal from "../components/POScomponent/Modal/VoidTransactionModal";
+import PaymentModal from "../components/POScomponent/Modal/PaymentModal";
+import Notification from "../components/common/Notification";
 
 export default function POSCashier({ isCashier, isAdmin }) {
   const [cart, setCart] = useState([]);
@@ -15,6 +17,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notification, setNotification] = useState(null);
 
   // ================== FETCH PRODUCTS ==================
   useEffect(() => {
@@ -62,23 +65,37 @@ export default function POSCashier({ isCashier, isAdmin }) {
   }, [activeCategory, searchTerm, sortOption, items]);
 
   // ================== HANDLE CHECKOUT ==================
-  const handleCheckout = async () => {
-    if (cart.length === 0) return alert("Cart is empty!");
+  const handleCheckout = async (paymentData) => {
+    if (cart.length === 0) {
+      setNotification({ type: "warning", message: "Cart is empty!" });
+      return;
+    }
 
     try {
       const response = await fetch("http://localhost:5200/api/pos/complete-sale", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cart }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          cart,
+          paymentMethod: paymentData.paymentMethod,
+          amountPaid: paymentData.amountPaid,
+          discount: paymentData.discount,
+        }),
       });
 
       const data = await response.json();
 
       if (data.success) {
+        setNotification({ type: "success", message: "Sale completed successfully!" });
         setModalContent(
           <ReceiptModal
-            orderId={data.orderId}   // ✅ REAL DB order_id
-            total={totalAmount}
+            transactionId={data.transactionId}
+            transactionNumber={data.transactionNumber}
+            total={data.totalAmount}
+            change={data.changeAmount}
             cart={cart}
             onClose={() => setModalOpen(false)}
           />
@@ -87,24 +104,41 @@ export default function POSCashier({ isCashier, isAdmin }) {
         setModalOpen(true);
         setCart([]);
       } else {
-        alert(data.message);
+        setNotification({ type: "error", message: data.message });
       }
     } catch (err) {
       console.error(err);
-      alert("Error completing sale.");
+      setNotification({ type: "error", message: "Error completing sale: " + err.message });
     }
   };
 
-
   const handleVoidTransaction = () => {
+    // previously showed a confirm modal; now simply clear cart
+    setCart([]);
+    setNotification({ type: "success", message: "Cart cleared" });
+  };
+
+  const decrementItem = (productId) => {
+    setCart((prev) => {
+      const updated = prev.map((i) => ({ ...i }));
+      const idx = updated.findIndex((i) => i.product_id === productId);
+      if (idx === -1) return updated;
+
+      if (updated[idx].qty > 1) {
+        updated[idx].qty -= 1;
+      } else {
+        updated.splice(idx, 1);
+      }
+      return updated;
+    });
+  };
+
+  const handleOpenPayment = () => {
     setModalContent(
-      <VoidTransactionModal
+      <PaymentModal
+        totalAmount={totalAmount}
+        onConfirm={handleCheckout}
         onClose={() => setModalOpen(false)}
-        onConfirm={() => {
-          setCart([]);
-          alert("Transaction successfully voided!");
-          setModalOpen(false);
-        }}
       />
     );
     setModalOpen(true);
@@ -112,6 +146,14 @@ export default function POSCashier({ isCashier, isAdmin }) {
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+      {/* Notification */}
+      {notification && (
+        <Notification
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 border-b border-red-200 text-red-800 px-6 py-3 flex justify-between items-center">
@@ -163,8 +205,9 @@ export default function POSCashier({ isCashier, isAdmin }) {
           <ReceiptPanel
             cart={cart}
             totalAmount={totalAmount}
-            handleCheckout={handleCheckout}
+            handleCheckout={handleOpenPayment}
             setCart={setCart}
+            decrementItem={decrementItem}
             isCashier={isCashier}
             isAdmin={isAdmin}
             handleVoidTransaction={handleVoidTransaction}

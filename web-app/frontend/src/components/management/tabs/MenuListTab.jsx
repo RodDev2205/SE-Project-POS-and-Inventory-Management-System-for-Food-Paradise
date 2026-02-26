@@ -170,9 +170,6 @@ export default function MenuListTab() {
           </button>
         </div>
 
-        <button className="bg-green-600 text-white px-4 py-2 rounded-lg">
-          + Add Menu
-        </button>
       </div>
 
       {/* Pagination */}

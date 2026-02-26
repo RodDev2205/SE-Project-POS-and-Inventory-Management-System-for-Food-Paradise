@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { addIngredient, getIngredientsByBranch, editIngredientById } from '../controllers/inventoryController.js';
+import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -19,6 +19,14 @@ router.get(
   verifyToken,
   requireRole(2, 3), // SuperAdmin and Admin
   getIngredientsByBranch
+);
+
+// Get all ingredients across all branches (only for SuperAdmin)
+router.get(
+  '/all-inventory',
+  verifyToken,
+  requireRole(3), // SuperAdmin only
+  getAllInventoryItems
 );
 
 // Edit an existing ingredient (only for SuperAdmin and Admin)

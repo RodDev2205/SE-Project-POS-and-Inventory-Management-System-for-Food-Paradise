@@ -56,10 +56,11 @@ export default (io) => {
       }
     });
 
-    // Send message
-    socket.on("sendMessage", async ({ branch_id, message }) => {
+    // Send message (supports text or attachment)
+    socket.on("sendMessage", async ({ branch_id, message = '', message_type = 'text', attachment_url = null, attachment_name = null }) => {
       try {
-        if (!message.trim()) return;
+        // require either text or attachment
+        if (!message.trim() && !attachment_url) return;
         if (socket.user.role_id === 2 && socket.user.branch_id !== branch_id) {
           return socket.emit("error", "Access denied: You can only send messages to your branch");
         }
@@ -76,8 +77,8 @@ export default (io) => {
         const room_id = await ensureChatRoomExists(branch_id);
 
         const [result] = await db.execute(
-          "INSERT INTO messages (room_id, sender_id, message, message_type) VALUES (?, ?, ?, 'text')",
-          [room_id, sender_id, message]
+          "INSERT INTO messages (room_id, sender_id, message, message_type, attachment_url, attachment_name) VALUES (?, ?, ?, ?, ?, ?)",
+          [room_id, sender_id, message, message_type, attachment_url, attachment_name]
         );
 
         const message_id = result.insertId;
@@ -100,8 +101,9 @@ export default (io) => {
           full_name: senderName,
           username: senderRows[0]?.username || "Unknown",
           message,
-          message_type: 'text',
-          attachment_url: null,
+          message_type,
+          attachment_url,
+          attachment_name,
           created_at: new Date().toISOString(),
           message_status: 'delivered',
         });

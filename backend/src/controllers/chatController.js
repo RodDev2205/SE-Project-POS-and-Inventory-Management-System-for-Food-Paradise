@@ -93,6 +93,7 @@ export const getBranchMessages = async (req, res) => {
          m.message,
          m.message_type,
          m.attachment_url,
+         m.attachment_name,
          m.created_at,
          COALESCE(ms.status, 'sent') as message_status
        FROM messages m

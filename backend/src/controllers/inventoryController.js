@@ -91,6 +91,24 @@ export const getIngredientsByBranch = async (req, res) => {
   }
 };
 
+// GET all ingredients across all branches (SuperAdmin only)
+export const getAllInventoryItems = async (req, res) => {
+  try {
+    // Fetch inventory from all branches with branch information
+    const [rows] = await db.execute(
+      `SELECT i.*, b.branch_name
+       FROM inventory i
+       LEFT JOIN branches b ON i.branch_id = b.branch_id
+       ORDER BY b.branch_name ASC, i.item_name ASC`
+    );
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
 export const editIngredientById = async (req, res) => {
   try {
     const { id } = req.params; // inventory ID from URL

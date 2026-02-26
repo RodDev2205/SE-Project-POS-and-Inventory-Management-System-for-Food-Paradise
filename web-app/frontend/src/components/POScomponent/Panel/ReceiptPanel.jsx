@@ -6,8 +6,8 @@ export default function ReceiptPanel({
   totalAmount,
   handleCheckout,
   setCart,
+  decrementItem,
   isCashier,
-  handleVoidTransaction,
   isAdmin,
 }) {
   const today = new Date().toLocaleDateString("en-PH", {
@@ -39,8 +39,14 @@ export default function ReceiptPanel({
             <p className="text-xs text-gray-400">Click items to add to cart</p>
           </div>
         ) : (
-          cart.map((item, idx) => (
-            <div key={idx} className="flex justify-between items-start text-sm bg-gray-50 rounded-lg p-3 hover:shadow-sm transition-shadow">
+          cart.map((item) => (
+            <div key={item.product_id} className="flex justify-between items-start text-sm bg-gray-50 rounded-lg p-3 hover:shadow-sm transition-shadow">
+              <button
+                className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded-full mr-2 hover:bg-red-600"
+                onClick={() => decrementItem(item.product_id)}
+              >
+                -
+              </button>
               <div className="flex-1 pr-2">
                 <div className="font-semibold text-gray-900 text-xs">{item.item}</div>
                 <div className="text-xs text-gray-600">{item.qty}x @ ₱{item.price.toFixed(2)}</div>
@@ -99,10 +105,10 @@ export default function ReceiptPanel({
         {isCashier && (
           <button
             className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 rounded-lg transition-all flex items-center justify-center gap-2 active:scale-95 text-sm"
-            onClick={handleVoidTransaction}
+            onClick={() => setCart([])}
           >
             <AlertCircle className="w-4 h-4" />
-            Void Transaction
+            Clear Cart
           </button>
         )}
       </div>

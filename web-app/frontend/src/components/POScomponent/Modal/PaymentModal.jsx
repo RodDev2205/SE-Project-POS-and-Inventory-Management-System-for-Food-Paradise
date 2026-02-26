@@ -1,0 +1,193 @@
+import React, { useState } from "react";
+
+export default function PaymentModal({ totalAmount, onConfirm, onClose }) {
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [amountPaid, setAmountPaid] = useState(totalAmount);
+  const [discountType, setDiscountType] = useState("none");
+  const [discountValue, setDiscountValue] = useState(0);
+
+  const discountAmount =
+    discountType === "percentage"
+      ? (totalAmount * discountValue) / 100
+      : discountType === "fixed"
+      ? discountValue
+      : 0;
+
+  const finalAmount = totalAmount - discountAmount;
+  const change = amountPaid - finalAmount;
+  const isValidPayment = amountPaid >= finalAmount;
+
+  const handleConfirm = () => {
+    // Ensure amountPaid is a valid number
+    const finalAmountPaid = parseFloat(amountPaid) || 0;
+    const finalDiscountValue = parseFloat(discountValue) || 0;
+
+    if (!paymentMethod) {
+      alert("Please select a payment method!");
+      return;
+    }
+
+    if (finalAmountPaid <= 0) {
+      alert("Amount paid must be greater than 0!");
+      return;
+    }
+
+    if (!isValidPayment) {
+      alert("Amount paid is less than total!");
+      return;
+    }
+
+    onConfirm({
+      paymentMethod,
+      amountPaid: finalAmountPaid,
+      discount: {
+        type: discountType,
+        value: finalDiscountValue,
+      },
+    });
+
+    onClose();
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-8 max-w-lg w-full">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Payment</h2>
+
+      {/* Order Summary */}
+      <div className="bg-gray-50 p-4 rounded-lg mb-6 space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Subtotal:</span>
+          <span className="font-semibold">₱{totalAmount.toFixed(2)}</span>
+        </div>
+
+        {discountAmount > 0 && (
+          <div className="flex justify-between text-red-600">
+            <span>Discount:</span>
+            <span>-₱{discountAmount.toFixed(2)}</span>
+          </div>
+        )}
+
+        <div className="border-t pt-2 flex justify-between font-bold text-lg">
+          <span>Total:</span>
+          <span>₱{finalAmount.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* Discount Section */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Discount
+        </label>
+        <div className="flex gap-2 mb-3">
+          <select
+            value={discountType}
+            onChange={(e) => {
+              setDiscountType(e.target.value);
+              setDiscountValue(0);
+            }}
+            className="flex-1 border px-3 py-2 rounded text-sm"
+          >
+            <option value="none">No Discount</option>
+            <option value="percentage">Percentage (%)</option>
+            <option value="fixed">Fixed (₱)</option>
+          </select>
+
+          {discountType !== "none" && (
+            <input
+              type="number"
+              value={discountValue}
+              onChange={(e) => setDiscountValue(e.target.value)}
+              placeholder="Value"
+              className="w-24 border px-3 py-2 rounded text-sm"
+              min="0"
+              step="0.01"
+            />
+          )}
+        </div>
+
+        {discountAmount > 0 && (
+          <p className="text-xs text-blue-600">
+            Discount Amount: ₱{discountAmount.toFixed(2)}
+          </p>
+        )}
+      </div>
+
+      {/* Payment Method */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-3">
+          Payment Method
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {["cash", "gcash", "card"].map((method) => (
+            <button
+              key={method}
+              onClick={() => setPaymentMethod(method)}
+              className={`py-2 px-3 rounded text-sm font-medium transition-all ${
+                paymentMethod === method
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              {method.charAt(0).toUpperCase() + method.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Amount Paid */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Amount Paid
+        </label>
+        <input
+          type="number"
+          value={amountPaid || ""}
+          onChange={(e) => setAmountPaid(e.target.value)}
+          className="w-full border px-4 py-2 rounded text-lg font-semibold"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+        />
+      </div>
+
+      {/* Change */}
+      <div className="bg-green-50 p-4 rounded-lg mb-6 flex justify-between items-center">
+        <span className="text-gray-700 font-semibold">Change:</span>
+        <span
+          className={`text-2xl font-bold ${
+            change >= 0 ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          ₱{change.toFixed(2)}
+        </span>
+      </div>
+
+      {!isValidPayment && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mb-4 text-sm">
+          ⚠️ Payment is not enough!
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          className="flex-1 px-4 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded font-semibold transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleConfirm}
+          disabled={!isValidPayment}
+          className={`flex-1 px-4 py-3 rounded font-semibold transition-colors ${
+            isValidPayment
+              ? "bg-green-600 hover:bg-green-700 text-white"
+              : "bg-gray-400 text-gray-600 cursor-not-allowed"
+          }`}
+        >
+          Confirm Payment
+        </button>
+      </div>
+    </div>
+  );
+}
