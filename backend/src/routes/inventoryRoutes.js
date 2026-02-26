@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems } from '../controllers/inventoryController.js';
+import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems, getInventoryCount } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -35,6 +35,14 @@ router.put(
   verifyToken,
   requireRole(2, 3), // SuperAdmin and Admin
   editIngredientById
+);
+
+// Get inventory count (SuperAdmin and Admin)
+router.get(
+  '/count',
+  verifyToken,
+  requireRole(2, 3),
+  getInventoryCount
 );
 
 

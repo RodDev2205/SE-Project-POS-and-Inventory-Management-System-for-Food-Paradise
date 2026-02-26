@@ -44,6 +44,24 @@ const LineChartPlaceholder = () => (
 );
 
 const DashboardContent = () => {
+  const [inventoryCount, setInventoryCount] = React.useState(0);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:5200/api/inventory/count", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.count === "number") {
+          setInventoryCount(data.count);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch inventory count", err);
+      });
+  }, []);
+
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Dashboard Overview</h2>
@@ -59,7 +77,7 @@ const DashboardContent = () => {
         />
         <StatCard
           title="Current Inventory"
-          value="456 Items"
+          value={`${inventoryCount} Items`}
           icon={Package}
           bgColor="bg-amber-50"
           textColor="text-amber-700"

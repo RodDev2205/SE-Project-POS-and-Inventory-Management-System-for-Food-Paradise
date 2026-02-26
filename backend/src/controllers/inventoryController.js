@@ -109,6 +109,28 @@ export const getAllInventoryItems = async (req, res) => {
   }
 };
 
+// GET inventory record count (branch-specific for admin, global for superadmin)
+export const getInventoryCount = async (req, res) => {
+  try {
+    let query;
+    let params = [];
+    // if the user is superadmin (role 3) return global count
+    if (req.user && req.user.role_id === 3) {
+      query = `SELECT COUNT(*) as count FROM inventory`;
+    } else {
+      const branch_id = req.user.branch_id;
+      query = `SELECT COUNT(*) as count FROM inventory WHERE branch_id = ?`;
+      params = [branch_id];
+    }
+
+    const [[{ count }]] = await db.execute(query, params);
+    res.status(200).json({ count });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
 export const editIngredientById = async (req, res) => {
   try {
     const { id } = req.params; // inventory ID from URL
