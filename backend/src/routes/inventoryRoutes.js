@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems, getInventoryCount } from '../controllers/inventoryController.js';
+import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems, getInventoryCount, getLowStockCount } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -43,6 +43,14 @@ router.get(
   verifyToken,
   requireRole(2, 3),
   getInventoryCount
+);
+
+// Get count of low-stock inventory items (SuperAdmin and Admin)
+router.get(
+  '/low-stock-count',
+  verifyToken,
+  requireRole(2, 3),
+  getLowStockCount
 );
 
 

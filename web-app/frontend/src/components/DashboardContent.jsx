@@ -45,9 +45,12 @@ const LineChartPlaceholder = () => (
 
 const DashboardContent = () => {
   const [inventoryCount, setInventoryCount] = React.useState(0);
+  const [lowStockCount, setLowStockCount] = React.useState(0);
 
   React.useEffect(() => {
     const token = localStorage.getItem("token");
+
+    // fetch total inventory count
     fetch("http://localhost:5200/api/inventory/count", {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -59,6 +62,20 @@ const DashboardContent = () => {
       })
       .catch((err) => {
         console.error("Failed to fetch inventory count", err);
+      });
+
+    // fetch low stock count
+    fetch("http://localhost:5200/api/inventory/low-stock-count", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.count === "number") {
+          setLowStockCount(data.count);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch low stock count", err);
       });
   }, []);
 
@@ -84,7 +101,7 @@ const DashboardContent = () => {
         />
         <StatCard
           title="Low Stock Alerts"
-          value="14 Items"
+          value={`${lowStockCount} Items`}
           icon={AlertTriangle}
           bgColor="bg-red-50"
           textColor="text-red-700"

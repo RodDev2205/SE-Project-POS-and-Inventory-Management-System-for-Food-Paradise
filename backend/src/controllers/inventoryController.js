@@ -131,6 +131,29 @@ export const getInventoryCount = async (req, res) => {
   }
 };
 
+// GET count of low-stock items (based on total_servings <= low_stock_threshold)
+export const getLowStockCount = async (req, res) => {
+  try {
+    let query;
+    let params = [];
+
+    // global count for superadmin
+    if (req.user && req.user.role_id === 3) {
+      query = `SELECT COUNT(*) as count FROM inventory WHERE total_servings <= low_stock_threshold`;
+    } else {
+      const branch_id = req.user.branch_id;
+      query = `SELECT COUNT(*) as count FROM inventory WHERE branch_id = ? AND total_servings <= low_stock_threshold`;
+      params = [branch_id];
+    }
+
+    const [[{ count }]] = await db.execute(query, params);
+    res.status(200).json({ count });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
 export const editIngredientById = async (req, res) => {
   try {
     const { id } = req.params; // inventory ID from URL
