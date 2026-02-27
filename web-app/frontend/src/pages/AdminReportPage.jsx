@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Download } from "lucide-react";
 import {
   LineChart,
@@ -7,8 +7,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
   CartesianGrid,
   PieChart,
   Pie,
@@ -16,57 +14,232 @@ import {
   Legend,
 } from "recharts";
 
+import { useRef } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable"; // for table exports, used below
+
 export default function AdminReportsPage() {
+  const reportRef = useRef();
+  const [dailySales, setDailySales] = useState([]);
+  const [todaySales, setTodaySales] = useState(null);
+  const [period, setPeriod] = useState('daily'); // daily, weekly, monthly
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [paymentData, setPaymentData] = useState([]); // cash/gcash breakdown
+  const [topProducts, setTopProducts] = useState([]); // product ranking
+
+  useEffect(() => {
+    const fetchSalesData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        
+        // Check if token exists
+        if (!token) {
+          setError("Not authenticated. Please log in.");
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch sales for selected period (last 7 calendar units)
+        const today = new Date();
+        // last 7 calendar days inclusive: start = today - 6, end = today
+        const start = new Date();
+        start.setDate(today.getDate() - 6);
+        // format in local YYYY-MM-DD to avoid UTC shift
+        const format = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${dd}`;
+        };
+        const startDate = format(start);
+        const endDate = format(today);
+
+        const [salesRes, todayRes, paymentRes] = await Promise.all([
+          fetch(
+            `http://localhost:5200/api/sales-admin/sales?period=${period}&startDate=${startDate}&endDate=${endDate}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          ),
+          fetch("http://localhost:5200/api/sales-admin/today-sales", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(
+            `http://localhost:5200/api/sales-admin/payment-methods?startDate=${startDate}&endDate=${endDate}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          ),
+        ]);
+
+        if (!salesRes.ok || !todayRes.ok || !paymentRes.ok) {
+          throw new Error("Failed to fetch sales data");
+        }
+
+        const salesData = await salesRes.json();
+        const todayData = await todayRes.json();
+        const payData = await paymentRes.json();
+        const topData = await fetch(
+          `http://localhost:5200/api/sales-admin/top-products?startDate=${startDate}&endDate=${endDate}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).then(r => r.ok ? r.json() : []);
+
+        // Transform data for chart (group by period_key)
+        const chartData = salesData.map(item => {
+          let label = item.period_key;
+          if (period === 'daily') {
+            label = new Date(item.period_key).toLocaleDateString('en-US', { weekday: 'short' });
+          } else if (period === 'weekly') {
+            const [yearWeek] = item.period_key.split('-');
+            // week number is after hyphen
+            const wk = item.period_key.split('-')[1];
+            label = `W${wk}`;
+          } else if (period === 'monthly') {
+            const parts = item.period_key.split('-');
+            label = `${parts[0]}-${parts[1].padStart(2,'0')}`;
+          }
+          return { date: label, sales: Number(item.total_sales || 0) };
+        });
+
+        setDailySales(chartData.reverse());
+        setTodaySales(todayData);
+        // convert payment counts to percentages
+        // ensure both cash and gcash keys exist, normalize to lowercase
+        const normalized = payData.map(p => ({
+          payment_method: p.payment_method.toLowerCase(),
+          count: p.count,
+        }));
+        const methods = ['cash','gcash'];
+        const filled = methods.map(m => {
+          const row = normalized.find(r => r.payment_method === m);
+          return { payment_method: m, count: row ? row.count : 0 };
+        });
+        // use raw counts for the pie; recharts will compute percentages
+        const pie = filled.map(p => ({
+          name: p.payment_method,
+          value: p.count,
+        }));
+        setPaymentData(pie);
+        setTopProducts(topData);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching sales data:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    fetchSalesData();
+  }, [period]);
   const kpis = [
-    { title: "Total Sales Today", value: "₱45,320" },
-    { title: "Total Transactions", value: "312" },
-    { title: "Average Order Value", value: "₱145.20" },
-    { title: "Low Stock Items", value: "7 Items" },
+    {
+      title: "Total Sales Today",
+      value: `₱${(todaySales?.total_sales || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+    },
+    {
+      title: "Total Transactions",
+      value: todaySales?.transaction_count || 0,
+    },
+    {
+      title: "Average Order Value",
+      value: `₱${(todaySales?.avg_order_value || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+    },
+    {
+      title: "Completed Orders",
+      value: todaySales?.transaction_count || 0,
+    },
   ];
 
-  const salesTrend = [
-    { date: "Mon", sales: 12000 },
-    { date: "Tue", sales: 18000 },
-    { date: "Wed", sales: 15000 },
-    { date: "Thu", sales: 22000 },
-    { date: "Fri", sales: 30000 },
-    { date: "Sat", sales: 45000 },
-    { date: "Sun", sales: 38000 },
-  ];
+  if (loading) {
+    return <div className="p-6 text-center">Loading sales data...</div>;
+  }
 
-  const salesByCategory = [
-    { name: "Food", value: 40000 },
-    { name: "Drinks", value: 15000 },
-    { name: "Desserts", value: 10000 },
-    { name: "Add-ons", value: 8000 },
-  ];
+  if (error) {
+    return (
+      <div className="p-6 text-center text-red-600">
+        Error loading sales data: {error}
+      </div>
+    );
+  }
 
-  const paymentMethods = [
-    { name: "Cash", value: 30000 },
-    { name: "GCash", value: 20000 },
-    { name: "Card", value: 15000 },
-  ];
+  const exportCSV = () => {
+    // construct a simple CSV containing both the sales trend and top products
+    let csv = "Sales Trend\nDate,Sales\n";
+    dailySales.forEach(d => {
+      csv += `${d.date},${d.sales}\n`;
+    });
+    csv += "\nTop Selling Products\nProduct,Quantity Sold,Total Amount\n";
+    topProducts.forEach(p => {
+      csv += `${p.product_name || ''},${p.total_qty || 0},${p.total_amount || 0}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'branch_report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const topProducts = [
-    { name: "Burger", qty: 230, revenue: "₱23,000", profit: "₱8,000" },
-    { name: "Fries", qty: 180, revenue: "₱12,600", profit: "₱4,500" },
-    { name: "Milk Tea", qty: 150, revenue: "₱15,000", profit: "₱6,200" },
-  ];
+  const exportPDF = () => {
+    // build pdf manually to avoid html2canvas errors with tailwind colors
+    const doc = new jsPDF('p', 'pt', 'a4');
+    doc.setFontSize(18);
+    doc.text('Branch Report', 40, 40);
+
+    // KPIs summary
+    doc.setFontSize(12);
+    let y = 60;
+    kpis.forEach(k => {
+      doc.text(`${k.title}: ${k.value}`, 40, y);
+      y += 20;
+    });
+
+    // add sales trend note
+    y += 10;
+    doc.text('Sales Trend: see application charts', 40, y);
+    y += 20;
+
+    // Top products table
+    const tableBody = topProducts.map(p => [p.product_name || '', p.total_qty || 0, p.total_amount || 0]);
+    autoTable(doc, {
+      head: [['Product', 'Qty Sold', 'Total Amount']],
+      body: tableBody,
+      startY: y,
+      theme: 'grid',
+      styles: { fontSize: 10 },
+    });
+
+    doc.save('branch_report.pdf');
+  };
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div ref={reportRef} className="p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Branch Reports</h1>
           <p className="text-gray-500 text-sm">
-            CDO Main Branch | Jan 1 - Jan 31
+            {new Date().toLocaleDateString()} | Last 7 Days
           </p>
         </div>
-        <button className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl shadow-md hover:opacity-90">
-          <Download size={18} />
-          Export Report
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:opacity-90"
+          >
+            CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl shadow-md hover:opacity-90"
+          >
+            PDF
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -83,96 +256,94 @@ export default function AdminReportsPage() {
       </div>
 
       {/* Charts */}
+      <div className="flex items-center space-x-4 mb-4">
+        <label className="text-sm font-medium">Period:</label>
+        <select
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          className="border rounded px-2 py-1"
+        >
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sales Trend */}
         <div className="bg-white rounded-2xl shadow-md p-6">
           <h2 className="text-lg font-semibold mb-4">
-            Weekly Sales Trend
+            {period.charAt(0).toUpperCase() + period.slice(1)} Sales Trend (Last 7 Days)
           </h2>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={salesTrend}>
+            <LineChart data={dailySales}>
+              <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="sales" strokeWidth={3} />
+              <Tooltip
+                formatter={(value) =>
+                  `₱${Number(value).toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                  })}`
+                }
+              />
+              <Line type="monotone" dataKey="sales" strokeWidth={3} stroke="#000" />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Sales by Category */}
+        {/* Payment method pie chart */}
         <div className="bg-white rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">
-            Sales by Category
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={salesByCategory}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Payment Methods */}
-        <div className="bg-white rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">
-            Sales by Payment Method
-          </h2>
+          <h2 className="text-lg font-semibold mb-4">Payment Method Breakdown</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={paymentMethods}
+                data={paymentData}
                 dataKey="value"
                 nameKey="name"
+                cx="50%"
+                cy="50%"
                 outerRadius={100}
-                label
+                label={({ name, percent }) => `${name}: ${ (percent*100).toFixed(1) }%`}
               >
-                {paymentMethods.map((entry, index) => (
-                  <Cell key={`cell-${index}`} />
+                {paymentData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.name === 'cash' ? '#8884d8' : '#82ca9d'}
+                  />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value, name, props) => {
+                    const total = paymentData.reduce((s,e)=>s+e.value,0);
+                    const pct = total ? (value/total)*100 : 0;
+                    return [`${value}`, `${pct.toFixed(1)}%`];
+                }} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
-        {/* Top Products */}
-        <div className="bg-white rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">
-            Top Selling Products
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2">Product</th>
-                  <th>Qty Sold</th>
-                  <th>Revenue</th>
-                  <th>Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.map((product, index) => (
-                  <tr
-                    key={index}
-                    className="border-b hover:bg-gray-100 transition"
-                  >
-                    <td className="py-2">{product.name}</td>
-                    <td>{product.qty}</td>
-                    <td>{product.revenue}</td>
-                    <td>{product.profit}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* Top products table */}
+      <div className="bg-white rounded-2xl shadow-md p-6">
+        <h2 className="text-lg font-semibold mb-4">Top Selling Products</h2>
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr>
+              <th className="p-2 border-b">Product</th>
+              <th className="p-2 border-b">Quantity Sold</th>
+              <th className="p-2 border-b">Total Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topProducts.map((prod, idx) => (
+              <tr key={idx} className="hover:bg-gray-100">
+                <td className="p-2 border-b">{prod.product_name || 'Unknown'}</td>
+                <td className="p-2 border-b">{prod.total_qty}</td>
+                <td className="p-2 border-b">₱{Number(prod.total_amount).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

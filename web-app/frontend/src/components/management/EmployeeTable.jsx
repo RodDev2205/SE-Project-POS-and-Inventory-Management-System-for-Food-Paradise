@@ -264,9 +264,11 @@ export default function UserList({ type }) {
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((user) => {
-                const userId = user.id || user.user_id;
-                const isActive = user.status === "Activate";
+              filteredUsers
+                .filter((u) => u != null)
+                .map((user) => {
+                  const userId = user.id || user.user_id;
+                  const isActive = user.status === "Activate";
 
                 return (
                   <tr key={userId} className="hover:bg-gray-50">

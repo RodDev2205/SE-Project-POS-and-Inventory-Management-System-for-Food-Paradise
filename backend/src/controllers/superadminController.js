@@ -47,7 +47,8 @@ export const getCashiers = async (req, res) => {
 
 export const createAdmin = async (req, res) => {
   try {
-    const superadminId = req.user.id; 
+    // token payload uses user_id field, not id
+    const superadminId = req.user.user_id;
     const { full_name, username, password, branch_id } = req.body; // match frontend
     if (!full_name || !username || !password || !branch_id) {
       return res.status(400).json({ error: "All fields are required" });
@@ -62,12 +63,22 @@ export const createAdmin = async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await db.query(
+    const [result] = await db.query(
       `INSERT INTO users (full_name, username, password, role_id, branch_id, status, created_by)
        VALUES (?, ?, ?, 2, ?, 'Activate', ?)`,
       [full_name, username, hashedPassword, branch_id, superadminId]
     );
-    res.json({ message: "Admin created successfully" });
+
+    // generate 4-digit pin code for the newly created admin using SQL expression
+    const newUserId = result.insertId;
+    await db.query(
+      `UPDATE users
+       SET pin_code = LPAD(FLOOR(RAND() * 10000), 4, '0')
+       WHERE user_id = ?`,
+      [newUserId]
+    );
+
+    res.json({ message: "Admin created successfully", userId: newUserId });
     } catch (err) {
     res.status(500).json({ error: "Error creating admin", details: err.message });
   }
@@ -75,7 +86,7 @@ export const createAdmin = async (req, res) => {
 
 export const createCashier = async (req, res) => {
   try {
-    const superadminId = req.user.id; 
+    const superadminId = req.user.user_id; 
     const { full_name, username, password, branch_id } = req.body; // match frontend
     if (!full_name || !username || !password || !branch_id) {
       return res.status(400).json({ error: "All fields are required" });

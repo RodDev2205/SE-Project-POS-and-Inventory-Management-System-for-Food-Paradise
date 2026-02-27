@@ -4,6 +4,7 @@ dotenv.config();
 
 export const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
+  console.log("Auth Header received:", authHeader); // DEBUG
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "No token provided" });

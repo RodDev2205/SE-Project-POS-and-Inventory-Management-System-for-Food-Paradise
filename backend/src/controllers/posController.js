@@ -186,12 +186,74 @@ export const completeSale = async (req, res) => {
       totalAmount: totalAmount,
       changeAmount: changeAmount,
     });
-
   } catch (error) {
     await connection.rollback();
     console.error("POS Error:", error);
     res.status(500).json({ success: false, message: "Server error: " + error.message });
   } finally {
     connection.release();
+  }
+};
+
+// GET transactions for current user and branch
+export const getUserTransactions = async (req, res) => {
+  try {
+    const userId = req.user.user_id;
+    const branchId = req.user.branch_id;
+
+    const [rows] = await db.query(
+      `SELECT transaction_id, transaction_number, created_at, total_amount, amount_paid, status
+       FROM transactions
+       WHERE cashier_id = ? AND branch_id = ?
+       ORDER BY created_at DESC`,
+      [userId, branchId]
+    );
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error("DB ERROR (getUserTransactions):", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// GET detailed information for single transaction (must belong to same branch/user)
+export const getTransactionDetails = async (req, res) => {
+  try {
+    const transactionId = req.params.id;
+    const userId = req.user.user_id;
+    const branchId = req.user.branch_id;
+
+    // Fetch transaction header
+    const [[transaction]] = await db.query(
+      `SELECT t.*, u.username AS cashier_name, b.branch_name
+       FROM transactions t
+       LEFT JOIN users u ON t.cashier_id = u.user_id
+       LEFT JOIN branches b ON t.branch_id = b.branch_id
+       WHERE t.transaction_id = ? AND t.branch_id = ?`,
+      [transactionId, branchId]
+    );
+
+    if (!transaction) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    // Optional: ensure cashier match so user only sees their own (admins could see all branch transactions)
+    if (transaction.cashier_id !== userId && req.user.role_id !== 3) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // Fetch items
+    const [items] = await db.query(
+      `SELECT ti.*, p.product_name
+       FROM transaction_items ti
+       LEFT JOIN products p ON ti.menu_id = p.product_id
+       WHERE ti.transaction_id = ?`,
+      [transactionId]
+    );
+
+    res.status(200).json({ transaction, items });
+  } catch (error) {
+    console.error("DB ERROR (getTransactionDetails):", error);
+    res.status(500).json({ message: "Database error", error: error.message });
   }
 };

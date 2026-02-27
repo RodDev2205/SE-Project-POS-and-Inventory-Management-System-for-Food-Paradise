@@ -1,38 +1,196 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import Modal from "./Modal/Modal";
+import TransactionDetailModal from "../POScomponent/Modal/TransactionDetailModal";
 
 export default function Records () {
-    const records = [
-        { date: '10-30-25', transaction: '00259', amount: 155.00, status: 'Completed'},
-        { date: '10-29-25', transaction: '00357', amount: 225.00, status: 'Completed'},
-        { date: '10-29-25', transaction: '00355', amount: 320.00, status: 'Completed'},
-    ];
+    const [records, setRecords] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
+    const [page, setPage] = useState(1);
+    const ITEMS_PER_PAGE = 8;
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalData, setModalData] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        fetch("http://localhost:5200/api/pos/user-transactions", {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(res => res.json())
+            .then(data => {
+                setRecords(data);
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Failed to fetch transactions", err);
+                setLoading(false);
+            });
+    }, []);
+
+    const formatTime = isoString => {
+        try {
+            const d = new Date(isoString);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (_e) {
+            return isoString;
+        }
+    };
+
+    const handleView = async (transaction) => {
+        setDetailLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5200/api/pos/transaction/${transaction.transaction_id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setModalData(data);
+                setIsModalOpen(true);
+            } else {
+                alert(data.message || "Failed to load transaction details");
+            }
+        } catch (err) {
+            console.error("Detail fetch error", err);
+            alert("Failed to load transaction details");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    // filter + pagination
+    const filtered = records.filter(r =>
+        r.transaction_number.toLowerCase().includes(search.toLowerCase()) ||
+        formatTime(r.created_at).includes(search)
+    );
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    const currentRecords = filtered.slice(start, start + ITEMS_PER_PAGE);
+
+    if (loading) {
+        return <div className="p-6">Loading transactions...</div>;
+    }
 
     return (
-        <div className="flex-1 bg-white rounded-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Records</h2>
+        <div className="flex-1 bg-white rounded-lg p-8 shadow-lg">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Transaction Records</h2>
+                <input
+                    type="text"
+                    placeholder="Search by number or time..."
+                    value={search}
+                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                    className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring focus:border-blue-300"
+                />
+            </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full table-auto">
                     <thead>
-                        <tr className="border-b-2 border-gray-300"> 
-                        <th className="text-left pb-3 font-bold text-gray-800">Date</th>
-                        <th className="text-left pb-3 font-bold text-gray-800">Transaction</th>
-                        <th className="text-left pb-3 font-bold text-gray-800">Amount</th>
-                        <th className="text-left pb-3 font-bold text-gray-800">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {records.map((record, idx) => (
-                        <tr key={idx} className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="py-4 text-gray-700">{record.date}</td>
-                            <td className="py-4 text-gray-700">{record.transaction}</td>
-                            <td className="py-4 text-gray-700">₱ {record.amount.toFixed(2)}</td>
-                            <td className="py-4 text-gray-700">{record.status}</td>
+                        <tr className="bg-gray-100 text-left text-sm text-gray-600 uppercase">
+                            <th className="px-4 py-3">Time</th>
+                            <th className="px-4 py-3">Transaction #</th>
+                            <th className="px-4 py-3">Total</th>
+                            <th className="px-4 py-3">Paid</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Action</th>
                         </tr>
-                    ))}
-                </tbody>
+                    </thead>
+                    <tbody className="text-sm text-gray-700">
+                        {currentRecords.map((record, idx) => (
+                            <tr
+                                key={record.transaction_id}
+                                className={`border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-gray-100`}
+                            >
+                                <td className="px-4 py-3">{formatTime(record.created_at)}</td>
+                                <td className="px-4 py-3 font-medium text-gray-800">{record.transaction_number}</td>
+                                <td className="px-4 py-3">₱ {Number(record.total_amount).toFixed(2)}</td>
+                                <td className="px-4 py-3">₱ {Number(record.amount_paid).toFixed(2)}</td>
+                                <td className="px-4 py-3 capitalize">{record.status}</td>
+                                <td className="px-4 py-3">
+                                    <button
+                                        onClick={() => handleView(record)}
+                                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                    >
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {currentRecords.length === 0 && (
+                            <tr>
+                                <td colSpan="6" className="text-center py-6 text-gray-500">
+                                    No records found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
                 </table>
             </div>
+
+            {totalPages > 1 && (
+                <div className="flex justify-end items-center gap-2 mt-4">
+                    <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                    >
+                        Prev
+                    </button>
+                    <span className="text-sm text-gray-600">
+                        Page {page} of {totalPages}
+                    </span>
+                    <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+
+            {/* modal */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                {detailLoading ? (
+                    <div className="p-4">Loading...</div>
+                ) : (
+                    <TransactionDetailModal
+                        data={modalData}
+                        onClose={() => setIsModalOpen(false)}
+                        onVoid={(txId, status) => {
+                            // use server-confirmed status when updating
+                            setRecords(prev =>
+                                prev.map(r =>
+                                    r.transaction_id === txId ? { ...r, status: status || 'Voided' } : r
+                                )
+                            );
+                            if (modalData && modalData.transaction.transaction_id === txId) {
+                                setModalData({
+                                    ...modalData,
+                                    transaction: { ...modalData.transaction, status: status || 'Voided' }
+                                });
+                            }
+                        }}
+                        onRefund={(txId, status) => {
+                            // use server-confirmed status when updating
+                            setRecords(prev =>
+                                prev.map(r =>
+                                    r.transaction_id === txId ? { ...r, status: status || 'Refunded' } : r
+                                )
+                            );
+                            if (modalData && modalData.transaction.transaction_id === txId) {
+                                setModalData({
+                                    ...modalData,
+                                    transaction: { ...modalData.transaction, status: status || 'Refunded' }
+                                });
+                            }
+                        }}
+                    />
+                )}
+            </Modal>
         </div>
     )
 }
