@@ -81,44 +81,54 @@ export default function LoginScreen({
   const handleLogin = async (username, password) => {
     setLoading(true);
     try {
-      // TODO: Replace with your real auth API call
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      // Call backend authentication API using machine IP instead of localhost
+      const response = await fetch('http://10.181.206.201:5200/api/auth/login', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password })
+      });
 
-      if (username && password) {
-        console.log('Login attempt:', { username, password });
-        
-        // TODO: Replace with actual backend authentication
-        // Backend should verify credentials and return user data including role
-        // Simulated user lookup - in production this comes from backend
-        const users = {
-          'superadmin': { email: 'superadmin@example.com', password: 'superadmin123', role: 'superadmin' },
-          'admin': { email: 'admin@example.com', password: 'admin123', role: 'admin' },
-          'cashier': { email: 'cashier@example.com', password: 'cashier123', role: 'cashier' },
-        };
-        
-        const user = users[username];
-        
-        if (!user || user.password !== password) {
-          Alert.alert('Login Failed', 'Invalid username or password.');
-          return;
-        }
-        
-        // Check if user role is superadmin
-        if (user.role !== 'superadmin') {
-          Alert.alert(
-            'Access Denied',
-            'Only superadmin users can access this application.'
-          );
-          return;
-        }
-        
-        onLoginSuccess(username);
-      } else {
-        Alert.alert('Login Failed', 'Invalid username or password.');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Login failed');
+      }
+
+      const data = await response.json();
+
+      // Check if user is superadmin (role_id = 3)
+      if (data.role_id !== 3) {
+        Alert.alert(
+          'Access Denied',
+          'Only Super Admin accounts can access this application.'
+        );
+        return;
+      }
+
+      // Store token in memory (or pass via context prop to parent)
+      console.log('Login successful:', { 
+        username, 
+        role_id: data.role_id,
+        token: data.token,
+        user_id: data.user_id,
+        branch_id: data.branch_id
+      });
+      
+      // Pass user data to parent component
+      if (onLoginSuccess) {
+        onLoginSuccess({
+          username,
+          token: data.token,
+          user_id: data.user_id,
+          role_id: data.role_id,
+          branch_id: data.branch_id
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.';
-      Alert.alert('Error', message);
+      Alert.alert('Login Failed', message);
+      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
