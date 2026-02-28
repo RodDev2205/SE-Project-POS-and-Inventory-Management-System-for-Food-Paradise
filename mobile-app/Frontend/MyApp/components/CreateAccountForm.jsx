@@ -1,0 +1,337 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+  FlatList,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AppTextInput from '@/components/AppText';
+import PrimaryButton from '@/components/Button';
+import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
+
+const ROLES = [
+  { id: 'cashier', label: 'Cashier' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'superadmin', label: 'Super Admin' },
+];
+
+export default function CreateAccountForm({
+  onCreateAccount,
+  onBackToLogin,
+  loading = false,
+}) {
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState(null);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validate = () => {
+    const e = {};
+    if (!fullName.trim()) e.fullName = 'Full name is required';
+    if (!email.trim()) e.email = 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Invalid email format';
+    if (!password) e.password = 'Password is required';
+    if (password.length < 6) e.password = 'Password must be at least 6 characters';
+    if (!confirmPassword) e.confirmPassword = 'Please confirm your password';
+    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (!selectedRole) e.role = 'Please select a role';
+    return e;
+  };
+
+  const handleCreateAccount = () => {
+    const e = validate();
+    if (Object.keys(e).length > 0) {
+      setErrors(e);
+      return;
+    }
+    setErrors({});
+    onCreateAccount({
+      fullName: fullName.trim(),
+      email: email.trim(),
+      password,
+      role: selectedRole.id,
+    });
+  };
+
+  const getRoleLabel = () => {
+    return selectedRole ? selectedRole.label : 'Select a role';
+  };
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.card}>
+        {onBackToLogin && (
+          <TouchableOpacity
+            onPress={onBackToLogin}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        )}
+        
+        <Text style={styles.heading}>Create Account</Text>
+
+        <Text style={styles.subheading}>
+          Create a new account for cashier,{'\n'}admin or super admin
+        </Text>
+
+        <AppTextInput
+          label="Full Name"
+          placeholder="Enter full name"
+          value={fullName}
+          onChangeText={(t) => { setFullName(t); setErrors(e => ({ ...e, fullName: undefined })); }}
+          error={errors.fullName}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+
+        <AppTextInput
+          label="Email"
+          placeholder="Enter email address"
+          value={email}
+          onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
+          error={errors.email}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          returnKeyType="next"
+        />
+
+        <AppTextInput
+          label="Password"
+          placeholder="Enter password"
+          value={password}
+          onChangeText={(t) => { setPassword(t); setErrors(e => ({ ...e, password: undefined })); }}
+          error={errors.password}
+          secureTextEntry
+          returnKeyType="next"
+        />
+
+        <AppTextInput
+          label="Confirm Password"
+          placeholder="Confirm password"
+          value={confirmPassword}
+          onChangeText={(t) => { setConfirmPassword(t); setErrors(e => ({ ...e, confirmPassword: undefined })); }}
+          error={errors.confirmPassword}
+          secureTextEntry
+          returnKeyType="done"
+        />
+
+        {/* Role Dropdown */}
+        <View style={styles.roleWrapper}>
+          <Text style={styles.label}>Role</Text>
+          <TouchableOpacity
+            style={[styles.roleButton, errors.role ? styles.roleButtonError : null]}
+            onPress={() => setShowRoleModal(true)}
+          >
+            <Text style={[styles.roleButtonText, !selectedRole && styles.rolePlaceholder]}>
+              {getRoleLabel()}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          {errors.role ? <Text style={styles.errorText}>{errors.role}</Text> : null}
+        </View>
+
+        <PrimaryButton
+          title="Create Account"
+          onPress={handleCreateAccount}
+          loading={loading}
+          style={styles.createBtn}
+        />
+
+        {onBackToLogin && (
+          <View style={styles.loginWrapper}>
+            <Text style={styles.loginText}>Already have an account? </Text>
+            <TouchableOpacity onPress={onBackToLogin}>
+              <Text style={styles.loginLink}>Log in</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      {/* Role Modal */}
+      <Modal
+        visible={showRoleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRoleModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowRoleModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Role</Text>
+            <FlatList
+              data={ROLES}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.roleOption,
+                    selectedRole?.id === item.id && styles.roleOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedRole(item);
+                    setShowRoleModal(false);
+                    setErrors(e => ({ ...e, role: undefined }));
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.roleOptionText,
+                      selectedRole?.id === item.id && styles.roleOptionTextSelected,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  {selectedRole?.id === item.id && (
+                    <Ionicons name="checkmark" size={20} color={Colors.primaryGreen} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl + 10,
+    marginBottom: Spacing.xl,
+    marginHorizontal: Spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  heading: {
+    fontSize: FontSize.xl,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+    textAlign: 'center',
+  },
+  subheading: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  label: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  roleWrapper: {
+    marginBottom: Spacing.md,
+  },
+  roleButton: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roleButtonError: {
+    borderColor: Colors.appleRed,
+  },
+  roleButtonText: {
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  rolePlaceholder: {
+    color: Colors.inputPlaceholder,
+  },
+  errorText: {
+    marginTop: Spacing.xs,
+    fontSize: FontSize.xs,
+    color: Colors.appleRed,
+  },
+  createBtn: {
+    marginTop: Spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  roleOption: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.greyBg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roleOptionSelected: {
+    backgroundColor: Colors.inputBg,
+  },
+  roleOptionText: {
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  roleOptionTextSelected: {
+    fontWeight: '600',
+    color: Colors.primaryGreen,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  loginWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+  },
+  loginText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+  },
+  loginLink: {
+    fontSize: FontSize.sm,
+    color: Colors.primaryGreen,
+    fontWeight: '600',
+  },
+});
