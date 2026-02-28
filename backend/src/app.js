@@ -17,6 +17,7 @@ import menu_superadmin_Routes from "./routes/menu_superadmin_Routes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js"; // <-- import activity routes
 import salesAdminRoutes from "./routes/salesAdminRoutes.js"; // <-- import sales admin routes
+import salesSuperAdminRoutes from "./routes/salesSuperAdminRoutes.js"; // <-- import sales superadmin routes
 import inventoryRoutes from "./routes/inventoryRoutes.js"; // <-- import inventory routes 
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use("/api/menu-superadmin", menu_superadmin_Routes);
 app.use("/api/chat", chatRoutes); // <-- register chat routes
 app.use("/api/inventory", inventoryRoutes); // <-- register inventory routes
 app.use("/api/sales-admin", salesAdminRoutes); // <-- register sales admin routes
+app.use("/api/sales-superadmin", salesSuperAdminRoutes); // register sales superadmin routes
 app.use("/api/activity-logs", activityRoutes);
 // Print route
 
