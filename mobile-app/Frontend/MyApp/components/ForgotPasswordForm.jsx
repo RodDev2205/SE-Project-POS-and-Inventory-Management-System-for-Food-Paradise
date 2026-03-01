@@ -23,6 +23,8 @@ export default function ForgotPasswordForm({
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -135,7 +137,7 @@ export default function ForgotPasswordForm({
       case 1:
         return 'Reset Password';
       case 2:
-        return 'Verify Code';
+        return 'Recovery PIN';
       case 3:
         return 'New Password';
       default:
@@ -200,8 +202,8 @@ export default function ForgotPasswordForm({
         {step === 2 && (
           <View>
             <AppTextInput
-              label="Verification Code"
-              placeholder="Enter 8-digit code"
+              label="Master Recovery PIN"
+              placeholder="Enter 8-digit pin"
               value={verificationCode}
               onChangeText={(t) => { setVerificationCode(t); setErrors(e => ({ ...e, verificationCode: undefined })); }}
               error={errors.verificationCode}
@@ -227,8 +229,10 @@ export default function ForgotPasswordForm({
               value={newPassword}
               onChangeText={(t) => { setNewPassword(t); setErrors(e => ({ ...e, newPassword: undefined })); }}
               error={errors.newPassword}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               returnKeyType="next"
+              rightIcon={showPassword ? 'eye' : 'eye-off'}
+              onRightIconPress={() => setShowPassword(v => !v)}
             />
             <AppTextInput
               label="Confirm Password"
@@ -236,9 +240,11 @@ export default function ForgotPasswordForm({
               value={confirmPassword}
               onChangeText={(t) => { setConfirmPassword(t); setErrors(e => ({ ...e, confirmPassword: undefined })); }}
               error={errors.confirmPassword}
-              secureTextEntry
+              secureTextEntry={!showConfirm}
               returnKeyType="done"
               onSubmitEditing={handleNext}
+              rightIcon={showConfirm ? 'eye' : 'eye-off'}
+              onRightIconPress={() => setShowConfirm(v => !v)}
             />
           </View>
         )}

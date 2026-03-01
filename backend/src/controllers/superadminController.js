@@ -179,5 +179,27 @@ export const getStaffByBranch = async (req, res) => {
   }
 };
 
+export const getAllStaff = async (req, res) => {
+  try {
+    // return every admin/cashier regardless of branch
+    const [rows] = await db.execute(
+      `SELECT 
+          u.user_id, 
+          u.full_name AS name,
+          u.role_id,
+          r.role_name,
+          u.status,
+          u.branch_id,
+          b.branch_name
+       FROM users u
+       JOIN roles r ON u.role_id = r.role_id
+       LEFT JOIN branches b ON u.branch_id = b.branch_id
+       WHERE u.role_id IN (1,2)`
+    );
 
-
+    res.json({ staff: rows });
+  } catch (err) {
+    console.error("Error fetching all staff:", err);
+    res.status(500).json({ error: "Failed to fetch all staff" });
+  }
+};

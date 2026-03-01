@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   StatusBar,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
+import { NotificationContext } from '@/context/NotificationContext';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -19,6 +21,13 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState('Super Admin');
   const [email, setEmail] = useState('superadmin@example.com');
   const [role, setRole] = useState('Super Admin');
+
+  // branch/staff management
+  const { auth } = useContext(NotificationContext);
+  const [branches, setBranches] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [staff, setStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
 
   const handleGoBack = () => {
     router.back();
@@ -32,6 +41,50 @@ export default function ProfileScreen() {
     Alert.alert('Success', 'Profile updated successfully');
     setIsEditing(false);
   };
+
+  // ---------- branches & staff network ----------
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('Failed to fetch branches');
+      const data = await res.json();
+      setBranches(data || []);
+    } catch (err) {
+      console.error('Failed to load branches', err);
+    }
+  };
+
+  const fetchStaff = async (branchId) => {
+    setLoadingStaff(true);
+    try {
+      let url = 'http://10.181.206.201:5200/api/superadmin/staff';
+      if (branchId && branchId !== 'all') {
+        url = `http://10.181.206.201:5200/api/superadmin/${branchId}/staff`;
+      }
+      const res = await fetch(url, {
+        headers: auth.token
+          ? { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' }
+          : { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed to fetch staff');
+      const data = await res.json();
+      setStaff(data.staff || []);
+    } catch (err) {
+      console.error('Error loading staff:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  useEffect(() => {
+    fetchStaff(selectedBranch);
+  }, [selectedBranch]);
 
   return (
     <View style={[styles.root, { backgroundColor: Colors.greyBg }]}>
@@ -154,6 +207,87 @@ export default function ProfileScreen() {
               <Text style={styles.infoBoxValue}>2 from this device</Text>
             </View>
           </View>
+        </View>
+
+        {/* Employee Management Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Employees</Text>
+
+          {/* branch filter */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.branchScroll}>
+            <TouchableOpacity
+              onPress={() => setSelectedBranch('all')}
+              style={[
+                styles.branchBtn,
+                selectedBranch === 'all' && styles.branchBtnSelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.branchBtnText,
+                  selectedBranch === 'all' && styles.branchBtnTextSelected,
+                ]}
+              >
+                All Branches
+              </Text>
+            </TouchableOpacity>
+            {branches.map((b) => (
+              <TouchableOpacity
+                key={b.branch_id}
+                onPress={() => setSelectedBranch(b.branch_id)}
+                style={[
+                  styles.branchBtn,
+                  selectedBranch === b.branch_id && styles.branchBtnSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.branchBtnText,
+                    selectedBranch === b.branch_id && styles.branchBtnTextSelected,
+                  ]}
+                >
+                  {b.branch_name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {loadingStaff && <ActivityIndicator size="small" color={Colors.primaryGreen} />}
+
+          {/* split active / deactivated */}
+          {staff.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>Active Users</Text>
+              {staff
+                .filter((u) => u.status === 'Activate' || u.status === 1)
+                .map((u) => (
+                  <View key={u.user_id} style={styles.employeeRow}>
+                    <View style={styles.employeeAvatar}>
+                      <Text style={styles.employeeAvatarText}>{u.name.charAt(0)}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                      <Text style={styles.value}>{u.name}</Text>
+                      <Text style={styles.label}>{u.role_name}</Text>
+                    </View>
+                  </View>
+                ))}
+
+              <Text style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>Deactivated Users</Text>
+              {staff
+                .filter((u) => u.status === 'Deactivate' || u.status === 0)
+                .map((u) => (
+                  <View key={u.user_id} style={styles.employeeRow}>
+                    <View style={styles.employeeAvatarInactive}>
+                      <Text style={styles.employeeAvatarText}>{u.name.charAt(0)}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                      <Text style={styles.value}>{u.name}</Text>
+                      <Text style={styles.label}>{u.role_name}</Text>
+                    </View>
+                  </View>
+                ))}
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -367,5 +501,57 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textPrimary,
     fontWeight: '600',
+  },
+
+  // branch filters
+  branchScroll: {
+    marginVertical: Spacing.sm,
+  },
+  branchBtn: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    backgroundColor: '#f0f0f0',
+    borderRadius: Radius.md,
+    marginRight: Spacing.sm,
+  },
+  branchBtnSelected: {
+    backgroundColor: Colors.primaryGreen,
+  },
+  branchBtnText: {
+    color: Colors.textPrimary,
+    fontSize: FontSize.sm,
+  },
+  branchBtnTextSelected: {
+    color: '#fff',
+  },
+
+  // employee rows
+  employeeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  employeeAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  employeeAvatarInactive: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ccc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  employeeAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: FontSize.base,
   },
 });

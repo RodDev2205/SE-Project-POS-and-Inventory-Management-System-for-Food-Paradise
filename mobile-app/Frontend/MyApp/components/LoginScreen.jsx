@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { View, ScrollView, StyleSheet, StatusBar, Alert } from 'react-native';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import LoginForm from '@/components/LoginForm';
 import ForgotPasswordForm from '@/components/ForgotPasswordForm';
 import CreateAccountScreen from '@/components/CreateAccountScreen';
 import { Colors, Spacing } from '@/constants/theme';
+import { NotificationContext } from '@/context/NotificationContext';
 
 export default function LoginScreen({
   onLoginSuccess,
@@ -54,7 +55,7 @@ export default function LoginScreen({
         
         // clear any previous token
         setResetToken(null);
-        Alert.alert('Code Sent', 'Please check your email for the verification code.');
+        Alert.alert('Proceed', 'Username and role matched. You may now enter the master recovery PIN.');
         return body;
       } else if (!newPassword) {
         // step 2: verify the code
@@ -148,6 +149,8 @@ export default function LoginScreen({
     );
   }
 
+  const { setAuth } = useContext(NotificationContext);
+
   const handleLogin = async (username, password) => {
     setLoading(true);
     try {
@@ -188,7 +191,7 @@ export default function LoginScreen({
         return;
       }
 
-      // Store token in memory (or pass via context prop to parent)
+      // store auth info in context as well as notify parent
       console.log('Login successful:', { 
         username, 
         role_id: data.role_id,
@@ -196,8 +199,8 @@ export default function LoginScreen({
         user_id: data.user_id,
         branch_id: data.branch_id
       });
-      
-      // Pass user data to parent component
+      setAuth({ token: data.token, user: data });
+
       if (onLoginSuccess) {
         onLoginSuccess({
           username,

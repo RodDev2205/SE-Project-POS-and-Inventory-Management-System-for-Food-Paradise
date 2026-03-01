@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { login } from "../controllers/authController.js";
+import { login, signup } from "../controllers/authController.js";
 import { startRecovery, verifyPin, resetPassword } from "../controllers/recoveryController.js";
 
 const router = Router();
 
 router.post("/login", login);
-
+router.post("/signup", signup);
 // Recovery flow
 // 1) POST /recovery/start        { username }
 // 2) POST /recovery/verify-pin  { username, pin } -> returns token

@@ -1,4 +1,5 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -7,33 +8,67 @@ import {
   TouchableOpacity,
   StatusBar,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import { NotificationContext } from '@/context/NotificationContext';
 
-const ONLINE_USERS = [
-  { name: 'Employee name', role: 'Role', color: '#f59e0b' }, 
-  { name: 'Employee name', role: 'Role', color: '#3b82f6' }, 
-  { name: 'Employee name', role: 'Role', color: '#10b981' }, 
-  { name: 'Employee name', role: 'Role', color: '#8b5cf6' }, 
-  { name: 'Employee name', role: 'Role', color: '#ef4444' }, 
-  { name: 'Employee name', role: 'Role', color: '#ec4899' }, 
-  { name: 'Employee name', role: 'Role', color: '#06b6d4' }, 
-  { name: 'Employee name', role: 'Role', color: '#22c55e' }, 
-];
-
-const OFFLINE_USERS = [
-  { name: 'Employee name', role: 'Role', color: '#eab308' }, 
-  { name: 'Employee name', role: 'Role', color: '#0ea5e9' }, 
-  { name: 'Employee name', role: 'Role', color: '#f43f5e' }, 
-];
+// dynamic data will replace the hardcoded lists
 
 export default function EmployeesScreen() {
-  const [selectedBranch, setSelectedBranch] = useState('branch1');
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [branches, setBranches] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [branchModalVisible, setBranchModalVisible] = useState(false);
+
+  const { auth } = useContext(NotificationContext);
+
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('Failed to fetch branches');
+      const data = await res.json();
+      setBranches(data || []);
+    } catch (err) {
+      console.error('Failed to load branches', err);
+    }
+  };
+
+  const fetchStaff = async (branchId) => {
+    setLoadingStaff(true);
+    try {
+      let url = 'http://10.181.206.201:5200/api/superadmin/staff';
+      if (branchId && branchId !== 'all') {
+        url = `http://10.181.206.201:5200/api/superadmin/${branchId}/staff`;
+      }
+      const res = await fetch(url, {
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('Failed to fetch staff');
+      const data = await res.json();
+      setStaff(data.staff || []);
+    } catch (err) {
+      console.error('Error loading staff:', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  useEffect(() => {
+    fetchStaff(selectedBranch);
+  }, [selectedBranch]);
+  const router = useRouter();
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const { notifications, toggleNotificationRead, unreadCount } = useContext(NotificationContext);
+  const { notifications, toggleNotificationRead, unreadCount, handleNotificationClick } = useContext(NotificationContext);
 
   const handleNotifications = () => {
     setNotificationsVisible(true);
@@ -84,61 +119,99 @@ export default function EmployeesScreen() {
           Employees that would log in or office can{'\n'}be monitored here.
         </Text>
 
-        {/* Branch selector */}
-        <View style={styles.branchSelector}>
-          <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch1' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch1')}
+        {/* Branch selector dropdown button */}
+        <TouchableOpacity
+          style={styles.dropdownTrigger}
+          onPress={() => setBranchModalVisible(true)}
+        >
+          <Text
+            style={styles.dropdownTriggerText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
           >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch1' && styles.branchTabTextActive]}>
-              Branch 1
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch2' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch2')}
-          >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch2' && styles.branchTabTextActive]}>
-              Branch 2
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Online Users section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="person" size={16} color="#666" />
-            <Text style={styles.sectionTitle}>Online Users</Text>
-          </View>
-
-          {ONLINE_USERS.map((employee, i) => (
-            <View key={i} style={styles.employeeRow}>
-              <View style={styles.employeeInfo}>
-                <View style={[styles.avatar, { backgroundColor: employee.color }]} />
-                <Text style={styles.employeeName}>{employee.name}</Text>
-              </View>
-              <Text style={styles.employeeRole}>{employee.role}</Text>
+            {selectedBranch === 'all'
+              ? 'All Branches'
+              : branches.find((b) => b.branch_id === selectedBranch)?.branch_name ||
+                'Select Branch'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.primaryGreen} />
+        </TouchableOpacity>
+        {/* branch chooser modal */}
+        <Modal
+          visible={branchModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBranchModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <ScrollView>
+                {/* All Branches option */}
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setSelectedBranch('all');
+                    setBranchModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalItemText}>All Branches</Text>
+                </TouchableOpacity>
+                {branches.map((b) => (
+                  <TouchableOpacity
+                    key={b.branch_id}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedBranch(b.branch_id);
+                      setBranchModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{b.branch_name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setBranchModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-
-        {/* Offline Users section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="person-outline" size={16} color="#666" />
-            <Text style={styles.sectionTitle}>Offline Users</Text>
           </View>
+        </Modal>
 
-          {OFFLINE_USERS.map((employee, i) => (
-            <View key={i} style={styles.employeeRow}>
-              <View style={styles.employeeInfo}>
-                <View style={[styles.avatar, { backgroundColor: employee.color }]} />
-                <Text style={styles.employeeName}>{employee.name}</Text>
-              </View>
-              <Text style={styles.employeeRole}>{employee.role}</Text>
-            </View>
-          ))}
-        </View>
+        {/* Users listing (active / deactivated) */}
+        {loadingStaff && <ActivityIndicator size="small" color={Colors.primaryGreen} />}
+        {staff.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Active Users</Text>
+            {staff
+              .filter((u) => u.status === 'Activate' || u.status === 1)
+              .map((u) => (
+                <View key={u.user_id} style={styles.employeeRow}>
+                  <View style={styles.employeeInfo}>
+                    <View
+                      style={[styles.avatar, { backgroundColor: Colors.primaryGreen }]}
+                    />
+                    <Text style={styles.employeeName}>{u.name}</Text>
+                  </View>
+                  <Text style={styles.employeeRole}>{u.role_name}</Text>
+                </View>
+              ))}
+
+            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Deactivated Users</Text>
+            {staff
+              .filter((u) => u.status === 'Deactivate' || u.status === 0)
+              .map((u) => (
+                <View key={u.user_id} style={styles.employeeRow}>
+                  <View style={styles.employeeInfo}>
+                    <View style={[styles.avatar, { backgroundColor: '#ccc' }]} />
+                    <Text style={styles.employeeName}>{u.name}</Text>
+                  </View>
+                  <Text style={styles.employeeRole}>{u.role_name}</Text>
+                </View>
+              ))}
+          </>
+        )}
       </ScrollView>
 
       {/* Notifications Dropdown */}
@@ -148,14 +221,14 @@ export default function EmployeesScreen() {
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.slice(0, 5).map((item) => (
+            {notifications.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.notificationDropdownItem,
                   !item.read && styles.notificationDropdownItemUnread,
                 ]}
-                onPress={() => toggleNotificationRead(item.id)}
+                onPress={() => handleNotificationClick(item, router)}
               >
                 <View
                   style={[
@@ -252,6 +325,29 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dropdownTriggerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
   branchTab: {
     flex: 1,
     paddingVertical: 8,
@@ -270,6 +366,75 @@ const styles = StyleSheet.create({
   branchTabTextActive: {
     color: '#fff',
   },
+
+  // branch modal styles
+  modalOverlay: {
+    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxHeight: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+  },
+  modalItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalCloseBtn: {
+    marginTop: 12,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: Colors.primaryGreen,
+  },
+  modalCloseText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  // employee rows
+  employeeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  employeeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  employeeName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  employeeRole: {
+    fontSize: 13,
+    color: '#666',
+  },
   section: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -286,32 +451,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#111',
-  },
-  employeeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  employeeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  employeeName: {
-    fontSize: 13,
-    color: '#333',
-  },
-  employeeRole: {
-    fontSize: 13,
-    color: '#888',
   },
   notificationsDropdown: {
     position: 'absolute',

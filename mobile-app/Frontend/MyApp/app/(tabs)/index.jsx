@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { io } from 'socket.io-client';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import StatCard from '@/components/Dashboard/StatCard';
@@ -19,8 +20,9 @@ import BarChart from '@/components/Dashboard/BarChart';
 import { NotificationContext } from '@/context/NotificationContext';
 
 const { width } = Dimensions.get('window');
+const API_BASE = 'http://10.181.206.201:5200';
 
-// ── Bar chart data ──────────────────────────────────────────────
+// dummy weekly sales data used in demo charts (can be replaced with real data later)
 const BRANCH1_DATA = [
   { day: 'M', value: 60 },
   { day: 'T', value: 80 },
@@ -43,12 +45,143 @@ const BRANCH2_DATA = [
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const socketRef = useRef(null);
+
+  const {
+    notifications,
+    toggleNotificationRead,
+    unreadCount,
+    auth,
+  } = useContext(NotificationContext);
+
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const { notifications, toggleNotificationRead, unreadCount } = useContext(NotificationContext);
 
+  const [totalSales, setTotalSales] = useState(null);
+  const [transactionCounts, setTransactionCounts] = useState({
+    completed_count: 0,
+    partial_refunded_count: 0,
+    refunded_count: 0,
+    voided_count: 0,
+  });
+  const [lowStockCount, setLowStockCount] = useState(null);
+  const [activeEmployees, setActiveEmployees] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  // ================================
+  // FETCH DASHBOARD STATS
+  // ================================
+  const fetchDashboardStats = async () => {
+    if (!auth?.token) return;
+
+    console.log('fetchDashboardStats called for', auth.user);
+    try {
+      setStatsLoading(true);
+
+      const headers = {
+        Authorization: `Bearer ${auth.token}`,
+        'Content-Type': 'application/json',
+      };
+
+      const [salesResp, lowStockResp, empResp] = await Promise.all([
+        fetch(`${API_BASE}/api/sales-admin/today-sales`, { headers }),
+        fetch(`${API_BASE}/api/inventory/low-stock-count`, { headers }),
+        fetch(`${API_BASE}/api/users/active-count`, { headers }),
+      ]);
+
+      console.log('dashboard stats responses', salesResp.status, lowStockResp.status, empResp.status);
+
+      if (salesResp.ok) {
+        const salesData = await salesResp.json();
+        console.log('salesData', salesData);
+        setTotalSales(salesData.total_sales ?? 0);
+        setTransactionCounts({
+          completed_count: salesData.completed_count ?? 0,
+          partial_refunded_count: salesData.partial_refunded_count ?? 0,
+          refunded_count: salesData.refunded_count ?? 0,
+          voided_count: salesData.voided_count ?? 0,
+        });
+      } else {
+        console.warn('salesResp not ok', salesResp.status);
+      }
+
+      if (lowStockResp.ok) {
+        const { count } = await lowStockResp.json();
+        console.log('lowStock count', count);
+        setLowStockCount(count ?? 0);
+      } else {
+        console.warn('lowStockResp not ok', lowStockResp.status);
+      }
+
+      if (empResp.ok) {
+        const { count } = await empResp.json();
+        console.log('active emp count', count);
+        setActiveEmployees(count ?? 0);
+      } else {
+        console.warn('empResp not ok', empResp.status);
+      }
+    } catch (error) {
+      console.error('Dashboard fetch error:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // ================================
+  // SOCKET INITIALIZATION
+  // ================================
+  useEffect(() => {
+    const branchId = auth?.user?.branch_id;
+    // token is required; branch only required for non-superadmins (role 2 = admin)
+    if (!auth?.token) return;
+    if (auth.user?.role_id === 2 && !branchId) return;
+
+    fetchDashboardStats();
+
+    socketRef.current = io(API_BASE, {
+      auth: { token: auth.token },
+      transports: ['websocket'], // more stable on mobile
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('✅ Dashboard socket connected:', socketRef.current.id);
+
+      if (branchId) {
+        socketRef.current.emit('joinBranchRoom', {
+          branch_id: Number(branchId),
+        });
+      }
+    });
+
+    socketRef.current.on('dashboardUpdate', () => {
+      console.log('📡 Dashboard update received');
+      fetchDashboardStats();
+    });
+
+    socketRef.current.on('disconnect', (reason) => {
+      console.log('❌ Socket disconnected:', reason);
+    });
+
+    socketRef.current.on('connect_error', (err) => {
+      console.log('⚠️ Socket connection error:', err.message);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [auth?.token, auth?.user?.branch_id, auth?.user?.role_id]);
+
+  // ================================
+  // HANDLERS
+  // ================================
   const handleProfileEdit = () => {
     setShowSettingsMenu(false);
     router.push('/profile-edit');
@@ -59,12 +192,28 @@ export default function DashboardScreen() {
     router.push('/bug-reports');
   };
 
-  const handleNotifications = () => {
-    setNotificationsVisible(true);
+  const handleViewBranchPerformance = () => {
+    setShowSettingsMenu(false);
+    router.push('activity');
   };
 
-  const handleViewBranchPerformance = () => {
-    router.push('activity');
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+
+      setShowLogoutModal(false);
+      router.replace('/Login'); // better than push
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const getIconColor = (type) => {
@@ -87,25 +236,10 @@ export default function DashboardScreen() {
     setShowLogoutModal(false);
   };
 
-  const handleConfirmLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      // Simulate logout process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('User logged out successfully');
-      // TODO: Clear user data/tokens here
-      
-      // Reset states before navigation
-      setIsLoggingOut(false);
-      setShowLogoutModal(false);
-      
-      // TODO: Navigate to login screen
-      router.push('/Login');
-    } catch (err) {
-      console.error('Logout error:', err);
-      setIsLoggingOut(false);
-      setShowLogoutModal(false);
-    }
+
+  const handleNotifications = () => {
+    setShowSettingsMenu(false);
+    setNotificationsVisible(!notificationsVisible);
   };
 
   return (
@@ -181,25 +315,49 @@ export default function DashboardScreen() {
         <View style={styles.cardsGrid}>
           <StatCard
             label="Total Sales today"
-            value="₱ 15,240"
+            value={
+              statsLoading
+                ? 'Loading...'
+                : totalSales != null
+                ? `₱ ${totalSales.toLocaleString()}`
+                : 'N/A'
+            }
             dotColor="#22c55e"
             bg="#dcfce7"
           />
           <StatCard
-            label="Total Transactions"
-            value="117 Orders"
+            label="Transactions"
+            value={
+              statsLoading
+                ? 'Loading...'
+                : transactionCounts
+                ? `C:${transactionCounts.completed_count} P:${transactionCounts.partial_refunded_count} R:${transactionCounts.refunded_count} V:${transactionCounts.voided_count}`
+                : 'N/A'
+            }
             dotColor="#06b6d4"
             bg="#cffafe"
           />
           <StatCard
             label="Low Stock Items"
-            value="6 Products"
+            value={
+              statsLoading
+                ? 'Loading...'
+                : lowStockCount != null
+                ? `${lowStockCount} Items`
+                : 'N/A'
+            }
             dotColor="#ef4444"
             bg="#fee2e2"
           />
           <StatCard
-            label="Employee Logins"
-            value="13 Logins"
+            label="Active Employees"
+            value={
+              statsLoading
+                ? 'Loading...'
+                : activeEmployees != null
+                ? `${activeEmployees} Staff`
+                : 'N/A'
+            }
             dotColor="#f97316"
             bg="#ffedd5"
           />
@@ -231,7 +389,7 @@ export default function DashboardScreen() {
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.slice(0, 5).map((item) => (
+            {notifications.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[

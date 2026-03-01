@@ -113,7 +113,10 @@ export const getSalesTodayByBranch = async (req, res) => {
     let query = `
       SELECT 
         SUM(CASE WHEN status = 'Completed' THEN total_amount ELSE 0 END) as total_sales,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) as transaction_count,
+        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_count,
+        SUM(CASE WHEN status = 'Partial Refunded' THEN 1 ELSE 0 END) as partial_refunded_count,
+        SUM(CASE WHEN status = 'Refunded' THEN 1 ELSE 0 END) as refunded_count,
+        SUM(CASE WHEN status = 'Voided' THEN 1 ELSE 0 END) as voided_count,
         COUNT(*) as all_transaction_count,
         MAX(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as max_order_value,
         MIN(CASE WHEN status = 'Completed' THEN total_amount ELSE NULL END) as min_order_value,
@@ -134,7 +137,11 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     res.json({
       total_sales: Number(result?.total_sales || 0),
-      transaction_count: result?.transaction_count || 0,
+      completed_count: result?.completed_count || 0,
+      partial_refunded_count: result?.partial_refunded_count || 0,
+      refunded_count: result?.refunded_count || 0,
+      voided_count: result?.voided_count || 0,
+      all_transaction_count: result?.all_transaction_count || 0,
       max_order_value: Number(result?.max_order_value || 0),
       min_order_value: Number(result?.min_order_value || 0),
       avg_order_value: Number(result?.avg_order_value || 0),

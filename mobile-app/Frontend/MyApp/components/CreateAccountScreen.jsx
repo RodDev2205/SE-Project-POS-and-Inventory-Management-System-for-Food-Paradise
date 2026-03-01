@@ -19,13 +19,22 @@ export default function CreateAccountScreen({
   const handleCreateAccount = async (accountData) => {
     setLoading(true);
     try {
-      // TODO: Replace with your real API call to create account
-      const { fullName, email, password, role } = accountData;
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('Account creation request:', { fullName, email, password, role });
-      
-      // Store the created account data and show success screen
-      setCreatedAccountData({ fullName, email, role });
+      // Call backend signup API — mobile-created accounts are Super Admin (role_id=3)
+      const { fullName, username, password, role_id } = accountData;
+      const resp = await fetch('http://10.181.206.201:5200/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName, username, password, role_id })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || err.message || `Signup failed (status ${resp.status})`);
+      }
+
+      const body = await resp.json().catch(() => ({}));
+      // Show success and display created account summary
+      setCreatedAccountData({ fullName, username, role: role_id });
       setAccountCreated(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create account.';

@@ -1,4 +1,5 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -7,6 +8,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -14,15 +16,65 @@ import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import Chatroom from '@/components/Chatroom';
 import { NotificationContext } from '@/context/NotificationContext';
 
-const CHATS = [
-  { id: '1', branch: 'Branch 1 Chatroom', time: '3:00 pm', avatar: '1', isOnline: true },
-  { id: '2', branch: 'Branch 2 Chatroom', time: '2:55 pm', avatar: '2', isOnline: false },
-];
-
 export default function MessagesScreen() {
+  const router = useRouter();
   const [selectedChat, setSelectedChat] = useState(null);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const { notifications, toggleNotificationRead, unreadCount } = useContext(NotificationContext);
+  const [branches, setBranches] = useState([]);
+
+  // update branch preview when a new message arrives
+  const handleNewMessage = (branchId, text, senderName, time) => {
+    setBranches((prev) =>
+      prev.map((b) =>
+        b.id === branchId.toString()
+          ? { ...b, lastMessage: text, lastMessageTime: time, senderName }
+          : b
+      )
+    );
+  };
+  const [loading, setLoading] = useState(true);
+  const { notifications, toggleNotificationRead, unreadCount, auth, handleNotificationClick } = useContext(NotificationContext);
+
+  // Fetch branches with messages from API
+  useEffect(() => {
+    const fetchBranches = async () => {
+      if (!auth?.token) return;
+      try {
+        setLoading(true);
+        const response = await fetch('http://10.181.206.201:5200/api/chat/branches-with-messages', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) throw new Error('Failed to fetch branches');
+        const data = await response.json();
+        
+        // Debug raw response
+        console.log('🔍 branches-with-messages response:', data);
+        // Format branches for display
+        const formattedBranches = data.map((branch, index) => ({
+          id: branch.branch_id.toString(),
+          branchName: branch.branch_name,
+          // API now returns lastMessage/lastTime and sender_name
+          lastMessage: branch.lastMessage || branch.last_message || 'No messages yet',
+          lastMessageTime: branch.lastTime || branch.last_message_time || '',
+          senderName: branch.sender_name || '',
+          isOnline: true, // You can determine this based on last activity
+          avatar: String(index + 1),
+        }));
+        
+        setBranches(formattedBranches);
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBranches();
+  }, [auth?.token]);
 
   const handleNotifications = () => {
     setNotificationsVisible(true);
@@ -43,10 +95,11 @@ export default function MessagesScreen() {
   if (selectedChat) {
     return (
       <Chatroom
-        branchName={selectedChat.branch}
+        branchName={selectedChat.branchName}
         branchId={selectedChat.id}
         onClose={() => setSelectedChat(null)}
         isOnline={selectedChat.isOnline}
+        onNewMessage={handleNewMessage}
       />
     );
   }
@@ -87,23 +140,36 @@ export default function MessagesScreen() {
         </Text>
 
         {/* Chat list */}
-        <View style={styles.chatList}>
-          {CHATS.map((chat) => (
-            <TouchableOpacity key={chat.id} style={styles.chatItem} onPress={() => setSelectedChat(chat)}>
-              <View style={styles.avatarContainer}>
-                <View style={[styles.avatar, { backgroundColor: chat.id === '1' ? '#a78bfa' : '#60a5fa' }]}>
-                  <Text style={styles.avatarText}>{chat.avatar}</Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primaryGreen} />
+          </View>
+        ) : branches.length === 0 ? (
+          <View style={styles.emptyChatContainer}>
+            <Ionicons name="chatbubbles-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyChatText}>No branches available</Text>
+          </View>
+        ) : (
+          <View style={styles.chatList}>
+            {branches.map((chat) => (
+              <TouchableOpacity key={chat.id} style={styles.chatItem} onPress={() => setSelectedChat(chat)}>
+                <View style={styles.avatarContainer}>
+                  <View style={[styles.avatar, { backgroundColor: chat.id === '1' ? '#a78bfa' : '#60a5fa' }]}>
+                    <Text style={styles.avatarText}>{chat.avatar}</Text>
+                  </View>
+                  <View style={[styles.statusIndicator, { backgroundColor: chat.isOnline ? '#10b981' : '#9ca3af' }]} />
                 </View>
-                <View style={[styles.statusIndicator, { backgroundColor: chat.isOnline ? '#10b981' : '#9ca3af' }]} />
-              </View>
-              <View style={styles.chatInfo}>
-                <Text style={styles.chatBranch}>{chat.branch}</Text>
-                <Text style={styles.statusText}>{chat.isOnline ? 'Online' : 'Offline'}</Text>
-              </View>
-              <Text style={styles.chatTime}>{chat.time}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <View style={styles.chatInfo}>
+                  <Text style={styles.chatBranch}>{chat.branchName}</Text>
+                  <Text style={styles.statusText} numberOfLines={1}>
+                    {chat.senderName ? `${chat.senderName}: ` : ''}{chat.lastMessage}
+                  </Text>
+                </View>
+                <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Info box */}
         <View style={styles.infoBox}>
@@ -120,14 +186,14 @@ export default function MessagesScreen() {
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.slice(0, 5).map((item) => (
+            {notifications.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.notificationDropdownItem,
                   !item.read && styles.notificationDropdownItemUnread,
                 ]}
-                onPress={() => toggleNotificationRead(item.id)}
+                onPress={() => handleNotificationClick(item, router)}
               >
                 <View
                   style={[
@@ -227,6 +293,21 @@ const styles = StyleSheet.create({
   chatList: {
     gap: 8,
     marginBottom: 16,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyChatContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyChatText: {
+    fontSize: 14,
+    color: '#999',
   },
   chatItem: {
     flexDirection: 'row',

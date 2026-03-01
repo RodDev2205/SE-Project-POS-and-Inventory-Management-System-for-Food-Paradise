@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,33 +13,143 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import { NotificationContext } from '@/context/NotificationContext';
+import { io as ioclient } from 'socket.io-client';
 
-const LOW_STOCK_ITEMS = [
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-];
-
-const OTHER_ITEMS = [
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-  { name: 'Item Name', status: 'Remaining stock' },
-];
 
 export default function InventoryStatusScreen() {
   const router = useRouter();
-  const [selectedBranch, setSelectedBranch] = useState('branch1');
+  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [branchModalVisible, setBranchModalVisible] = useState(false);
+  const [lowStockItems, setLowStockItems] = useState([]);
+  const [otherItems, setOtherItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const { notifications, toggleNotificationRead, unreadCount } = useContext(NotificationContext);
+  const socketRef = useRef(null);
+  const selectedBranchRef = useRef(null);
+  const { notifications, toggleNotificationRead, unreadCount, auth, addNotification, handleNotificationClick } = useContext(NotificationContext);
 
   const handleNotifications = () => {
     setNotificationsVisible(true);
   };
+
+  // Fetch branches (superadmin view)
+  const fetchBranches = async () => {
+    if (!auth?.token) return;
+    try {
+      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+      });
+      if (!res.ok) throw new Error('Failed to fetch branches');
+      const data = await res.json();
+      setBranches(data || []);
+
+      // auto-select branch named "Main" if present, otherwise first branch
+      const main = (data || []).find((b) => b.branch_name && b.branch_name.toLowerCase() === 'main');
+      const defaultBranch = main ? main.branch_id : (data && data[0] ? data[0].branch_id : null);
+      setSelectedBranch(defaultBranch);
+    } catch (err) {
+      console.error('Failed to load branches', err);
+    }
+  };
+
+  const fetchInventoryForBranch = async (branchId) => {
+    if (!auth?.token) return;
+    setLoading(true);
+    try {
+      let items = [];
+      // superadmin can fetch all and we filter by branch
+      if (auth?.user?.role_id === 3) {
+        const res = await fetch('http://10.181.206.201:5200/api/inventory/all-inventory', {
+          headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+        });
+        if (!res.ok) throw new Error('Failed to fetch inventory');
+        const data = await res.json();
+        items = (data || []).filter((i) => String(i.branch_id) === String(branchId));
+      } else {
+        // admin: backend will return their branch based on token
+        const res = await fetch('http://10.181.206.201:5200/api/inventory/get-ingredients', {
+          headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+        });
+        if (!res.ok) throw new Error('Failed to fetch inventory');
+        items = await res.json();
+      }
+
+      // split low stock vs others by quantity vs low_stock_threshold
+      const low = items.filter((it) => Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0));
+      const others = items.filter((it) => !(Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0)));
+      setLowStockItems(low);
+      setOtherItems(others);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // initialize branches and socket
+  useEffect(() => {
+    fetchBranches();
+
+    if (!auth?.token) return;
+    // connect socket
+      const socket = ioclient('http://10.181.206.201:5200', {
+      auth: { token: auth.token },
+      transports: ['websocket'],
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('Inventory socket connected');
+    });
+
+    socket.on('dashboardUpdate', (payload) => {
+      if (!payload) return;
+      const current = selectedBranchRef.current;
+      if (current && String(payload.branch_id) === String(current)) {
+        fetchInventoryForBranch(current);
+      }
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [auth?.token]);
+
+  // join branch room and fetch inventory when selectedBranch changes
+  useEffect(() => {
+    if (!selectedBranch) return;
+    selectedBranchRef.current = selectedBranch;
+    fetchInventoryForBranch(selectedBranch);
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('joinBranchRoom', { branch_id: selectedBranch });
+    }
+  }, [selectedBranch]);
+
+  // whenever low-stock list changes, add new notifications for items not already notified
+  useEffect(() => {
+    if (!lowStockItems || lowStockItems.length === 0) return;
+    lowStockItems.forEach((item) => {
+      const already = notifications.some(
+        (n) => n.type === 'inventory' && n.data?.inventory_id === item.inventory_id && !n.read
+      );
+      if (!already) {
+        const title = item.quantity <= 0 ? 'No stock' : 'Low stock';
+        addNotification({
+          title: `${title}: ${item.item_name}`,
+          message: `Qty: ${item.quantity}`,
+          time: new Date().toLocaleTimeString(),
+          icon: 'warning',
+          type: 'inventory',
+          target: 'inventory',
+          data: { inventory_id: item.inventory_id },
+        });
+      }
+    });
+  }, [lowStockItems]);
 
   const getIconColor = (type) => {
     const colorMap = {
@@ -86,25 +196,50 @@ export default function InventoryStatusScreen() {
           Inventory status such as item stocks can be{'\n'}monitored here:
         </Text>
 
-        {/* Branch selector */}
-        <View style={styles.branchSelector}>
-          <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch1' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch1')}
-          >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch1' && styles.branchTabTextActive]}>
-              Branch 1
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch2' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch2')}
-          >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch2' && styles.branchTabTextActive]}>
-              Branch 2
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Branch selector dropdown */}
+        <TouchableOpacity
+          style={styles.dropdownTrigger}
+          onPress={() => setBranchModalVisible(true)}
+        >
+          <Text style={styles.dropdownTriggerText} numberOfLines={1} ellipsizeMode="tail">
+            {selectedBranch
+              ? (branches.find((b) => String(b.branch_id) === String(selectedBranch))?.branch_name || 'Select Branch')
+              : 'Select Branch'}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.primaryGreen} />
+        </TouchableOpacity>
+
+        <Modal
+          visible={branchModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBranchModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <ScrollView>
+                {branches.map((b) => (
+                  <TouchableOpacity
+                    key={b.branch_id}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedBranch(b.branch_id);
+                      setBranchModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{b.branch_name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setBranchModalVisible(false)}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Low Stock Items section */}
         <View style={styles.section}>
@@ -115,12 +250,18 @@ export default function InventoryStatusScreen() {
             <Text style={styles.sectionTitle}>Low Stock Items</Text>
           </View>
 
-          {LOW_STOCK_ITEMS.map((item, i) => (
-            <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemStatus}>{item.status}</Text>
-            </View>
-          ))}
+          {loading ? (
+            <Text style={{ color: '#666' }}>Loading...</Text>
+          ) : lowStockItems.length === 0 ? (
+            <Text style={{ color: '#666' }}>No low stock items</Text>
+          ) : (
+            lowStockItems.map((item) => (
+              <View key={item.inventory_id} style={styles.itemRow}>
+                <Text style={styles.itemName}>{item.item_name}</Text>
+                <Text style={styles.itemStatus}>Qty: {item.quantity}</Text>
+              </View>
+            ))
+          )}
 
           <Text style={styles.infoText}>
             These are the items that are running low on supply. Inform employees to restock and update stock!
@@ -144,12 +285,18 @@ export default function InventoryStatusScreen() {
             <Text style={styles.sectionTitle}>Other Inventory Items</Text>
           </View>
 
-          {OTHER_ITEMS.map((item, i) => (
-            <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemStatus}>{item.status}</Text>
-            </View>
-          ))}
+          {loading ? (
+            <Text style={{ color: '#666' }}>Loading...</Text>
+          ) : otherItems.length === 0 ? (
+            <Text style={{ color: '#666' }}>No items</Text>
+          ) : (
+            otherItems.map((item) => (
+              <View key={item.inventory_id} style={styles.itemRow}>
+                <Text style={styles.itemName}>{item.item_name}</Text>
+                <Text style={styles.itemStatus}>Qty: {item.quantity}</Text>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -160,14 +307,14 @@ export default function InventoryStatusScreen() {
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.slice(0, 5).map((item) => (
+            {notifications.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[
                   styles.notificationDropdownItem,
                   !item.read && styles.notificationDropdownItemUnread,
                 ]}
-                onPress={() => toggleNotificationRead(item.id)}
+                onPress={() => handleNotificationClick(item, router)}
               >
                 <View
                   style={[
@@ -451,5 +598,54 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e6e6e6',
+  },
+  dropdownTriggerText: {
+    flex: 1,
+    marginRight: 8,
+    color: '#111',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    padding: 12,
+    maxHeight: '60%',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  modalItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalItemText: {
+    fontSize: 14,
+    color: '#111',
+  },
+  modalCloseBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: Colors.primaryGreen,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

@@ -6,19 +6,13 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Modal,
-  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppTextInput from '@/components/AppText';
 import PrimaryButton from '@/components/Button';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 
-const ROLES = [
-  { id: 'cashier', label: 'Cashier' },
-  { id: 'admin', label: 'Admin' },
-  { id: 'superadmin', label: 'Super Admin' },
-];
+// role selection removed — mobile-created accounts become Super Admin (role_id=3)
 
 export default function CreateAccountForm({
   onCreateAccount,
@@ -26,23 +20,22 @@ export default function CreateAccountForm({
   loading = false,
 }) {
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // role is fixed to superadmin (3) for mobile-created accounts
   const [errors, setErrors] = useState({});
 
   const validate = () => {
     const e = {};
     if (!fullName.trim()) e.fullName = 'Full name is required';
-    if (!email.trim()) e.email = 'Email is required';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Invalid email format';
+    if (!username.trim()) e.username = 'Username is required';
     if (!password) e.password = 'Password is required';
     if (password.length < 6) e.password = 'Password must be at least 6 characters';
     if (!confirmPassword) e.confirmPassword = 'Please confirm your password';
     if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match';
-    if (!selectedRole) e.role = 'Please select a role';
     return e;
   };
 
@@ -55,14 +48,10 @@ export default function CreateAccountForm({
     setErrors({});
     onCreateAccount({
       fullName: fullName.trim(),
-      email: email.trim(),
+      username: username.trim(),
       password,
-      role: selectedRole.id,
+      role_id: 3, // automatically assign Super Admin
     });
-  };
-
-  const getRoleLabel = () => {
-    return selectedRole ? selectedRole.label : 'Select a role';
   };
 
   return (
@@ -95,13 +84,12 @@ export default function CreateAccountForm({
         />
 
         <AppTextInput
-          label="Email"
-          placeholder="Enter email address"
-          value={email}
-          onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
-          error={errors.email}
+          label="Username"
+          placeholder="Enter username"
+          value={username}
+          onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
+          error={errors.username}
           autoCapitalize="none"
-          keyboardType="email-address"
           returnKeyType="next"
         />
 
@@ -111,8 +99,10 @@ export default function CreateAccountForm({
           value={password}
           onChangeText={(t) => { setPassword(t); setErrors(e => ({ ...e, password: undefined })); }}
           error={errors.password}
-          secureTextEntry
+          secureTextEntry={!showPassword}
           returnKeyType="next"
+          rightIcon={showPassword ? 'eye' : 'eye-off'}
+          onRightIconPress={() => setShowPassword(v => !v)}
         />
 
         <AppTextInput
@@ -121,24 +111,13 @@ export default function CreateAccountForm({
           value={confirmPassword}
           onChangeText={(t) => { setConfirmPassword(t); setErrors(e => ({ ...e, confirmPassword: undefined })); }}
           error={errors.confirmPassword}
-          secureTextEntry
+          secureTextEntry={!showConfirmPassword}
           returnKeyType="done"
+          rightIcon={showConfirmPassword ? 'eye' : 'eye-off'}
+          onRightIconPress={() => setShowConfirmPassword(v => !v)}
         />
 
-        {/* Role Dropdown */}
-        <View style={styles.roleWrapper}>
-          <Text style={styles.label}>Role</Text>
-          <TouchableOpacity
-            style={[styles.roleButton, errors.role ? styles.roleButtonError : null]}
-            onPress={() => setShowRoleModal(true)}
-          >
-            <Text style={[styles.roleButtonText, !selectedRole && styles.rolePlaceholder]}>
-              {getRoleLabel()}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          {errors.role ? <Text style={styles.errorText}>{errors.role}</Text> : null}
-        </View>
+        {/* Role is assigned automatically (Super Admin) — no selection */}
 
         <PrimaryButton
           title="Create Account"
@@ -156,54 +135,6 @@ export default function CreateAccountForm({
           </View>
         )}
       </View>
-
-      {/* Role Modal */}
-      <Modal
-        visible={showRoleModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowRoleModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowRoleModal(false)}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Role</Text>
-            <FlatList
-              data={ROLES}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    selectedRole?.id === item.id && styles.roleOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setSelectedRole(item);
-                    setShowRoleModal(false);
-                    setErrors(e => ({ ...e, role: undefined }));
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      selectedRole?.id === item.id && styles.roleOptionTextSelected,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                  {selectedRole?.id === item.id && (
-                    <Ionicons name="checkmark" size={20} color={Colors.primaryGreen} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }

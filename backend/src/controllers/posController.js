@@ -1,4 +1,5 @@
 import { db } from "../config/db.js";
+import { io } from "../../server.js"; // used to notify realtime updates
 
 // Helper function to generate unique transaction number
 const generateTransactionNumber = () => {
@@ -28,9 +29,8 @@ export const completeSale = async (req, res) => {
     const transactionItemsData = [];
     const ingredientDeductions = new Map(); // Track ingredient deductions needed
 
-    // ==================== STEP 1: Validate all items and collect ingredient needs ====================
+    // ==================== STEP 1: Validate items & collect ingredient needs ====================
     for (const item of cart) {
-      // Get product_id and price from products table
       const [productRows] = await connection.query(
         `SELECT product_id, price FROM products WHERE product_id = ?`,
         [item.product_id]
@@ -55,15 +55,12 @@ export const completeSale = async (req, res) => {
         total: itemTotal,
       });
 
-      // ✅ Get linked ingredients from menu_inventory table
+      // Get linked ingredients
       const [ingredientRows] = await connection.query(
-        `SELECT inventory_id, servings_required 
-         FROM menu_inventory 
-         WHERE product_id = ?`,
+        `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
         [item.product_id]
       );
 
-      // ❌ Check if product has any linked ingredients
       if (!ingredientRows || ingredientRows.length === 0) {
         await connection.rollback();
         return res.status(400).json({
@@ -77,15 +74,14 @@ export const completeSale = async (req, res) => {
         const servingsNeeded = ingredient.servings_required * item.qty;
         const key = ingredient.inventory_id;
 
-        if (ingredientDeductions.has(key)) {
-          ingredientDeductions.set(key, ingredientDeductions.get(key) + servingsNeeded);
-        } else {
-          ingredientDeductions.set(key, servingsNeeded);
-        }
+        ingredientDeductions.set(
+          key,
+          (ingredientDeductions.get(key) || 0) + servingsNeeded
+        );
       }
     }
 
-    // ==================== STEP 2: Check if enough servings in inventory ====================
+    // ==================== STEP 2: Check inventory ====================
     for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
       const [inventoryRows] = await connection.query(
         `SELECT item_name, total_servings FROM inventory WHERE inventory_id = ?`,
@@ -111,7 +107,7 @@ export const completeSale = async (req, res) => {
       }
     }
 
-    // ==================== STEP 3: Calculate transaction amounts ====================
+    // ==================== STEP 3: Calculate totals ====================
     const discountObj = discount || { type: "none", value: 0 };
     let discountAmount = 0;
 
@@ -132,17 +128,39 @@ export const completeSale = async (req, res) => {
       });
     }
 
-    // ==================== STEP 4: Deduct servings from inventory ====================
+    // ==================== STEP 4: Deduct servings and update quantity ====================
     for (const [inventoryId, servingsNeeded] of ingredientDeductions) {
+      // Deduct servings
       await connection.query(
         `UPDATE inventory 
-         SET total_servings = total_servings - ?
+         SET total_servings = total_servings - ? 
          WHERE inventory_id = ?`,
         [servingsNeeded, inventoryId]
       );
+
+      // Recompute quantity based on units
+      const [[row]] = await connection.query(
+        `SELECT quantity, servings_per_unit, total_servings, low_stock_threshold FROM inventory WHERE inventory_id = ?`,
+        [inventoryId]
+      );
+
+      if (row) {
+        const { servings_per_unit, total_servings, low_stock_threshold } = row;
+        const newQty = Math.floor(total_servings / servings_per_unit);
+
+        // Determine status: out_of_stock (0), low_stock (<= threshold), otherwise available
+        let newStatus = 'available';
+        if (newQty <= 0) newStatus = 'out_of_stock';
+        else if (low_stock_threshold != null && newQty <= Number(low_stock_threshold)) newStatus = 'low_stock';
+
+        await connection.query(
+          `UPDATE inventory SET quantity = ?, status = ? WHERE inventory_id = ?`,
+          [newQty, newStatus, inventoryId]
+        );
+      }
     }
 
-    // ==================== STEP 5: Create transaction record ====================
+    // ==================== STEP 5: Create transaction ====================
     const transactionNumber = generateTransactionNumber();
 
     const [transactionResult] = await connection.query(
@@ -178,13 +196,17 @@ export const completeSale = async (req, res) => {
 
     await connection.commit();
 
+    // Emit dashboard updates
+    io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
+    io.emit('dashboardUpdate', { branch_id: user.branch_id });
+
     res.json({
       success: true,
       message: "Sale completed and inventory updated!",
-      transactionId: transactionId,
-      transactionNumber: transactionNumber,
-      totalAmount: totalAmount,
-      changeAmount: changeAmount,
+      transactionId,
+      transactionNumber,
+      totalAmount,
+      changeAmount,
     });
   } catch (error) {
     await connection.rollback();

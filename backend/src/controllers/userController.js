@@ -1,5 +1,6 @@
 import { db } from "../config/db.js";
 import bcrypt from "bcrypt";
+import { io } from "../../server.js"; // realtime notification
 
 export const updateUser = async (req, res) => {
   try {
@@ -57,14 +58,38 @@ export const updateUser = async (req, res) => {
       [userId]
     );
 
+    // notify dashboards for affected branch(s)
+    const updated = updatedUserRows[0];
+    io.to(`branch_${updated.branch_id}`).emit('dashboardUpdate', { branch_id: updated.branch_id });
+    io.emit('dashboardUpdate', { branch_id: updated.branch_id });
     res.json({
       message: "User updated successfully",
-      user: updatedUserRows[0],
+      user: updated,
     });
   } catch (err) {
     res.status(500).json({
       error: "Failed to update user",
       details: err.message,
     });
+  }
+};
+
+// GET count of active employees (status = 'Activate')
+export const getActiveEmployeeCount = async (req, res) => {
+  try {
+    let query;
+    let params = [];
+    if (req.user && req.user.role_id === 3) {
+      query = `SELECT COUNT(*) as count FROM users WHERE status = 'Activate'`;
+    } else {
+      const branch_id = req.user.branch_id;
+      query = `SELECT COUNT(*) as count FROM users WHERE status = 'Activate' AND branch_id = ?`;
+      params = [branch_id];
+    }
+    const [[{ count }]] = await db.execute(query, params);
+    res.json({ count });
+  } catch (err) {
+    console.error('getActiveEmployeeCount error', err);
+    res.status(500).json({ message: 'Failed to fetch active employees', error: err.message });
   }
 };

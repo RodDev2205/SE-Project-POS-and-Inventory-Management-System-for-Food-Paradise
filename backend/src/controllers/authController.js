@@ -141,4 +141,42 @@ export const login = async (req, res) => {
     console.error(err);
     return res.status(500).json({ error: err.message });
   }
+}; 
+
+export const signup = async (req, res) => {
+  try {
+    const { full_name, username, password, role_id } = req.body;
+    if (!full_name || !username || !password || !role_id) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+    
+    // Check if username already exists
+    const [existingUser] = await db.query(
+      "SELECT * FROM users WHERE username = ?", 
+      [username]
+    );
+
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: "Username already exists" });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Insert new user
+    const [result] = await db.query(
+      `INSERT INTO users (full_name, username, password, role_id, status) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [full_name, username, hashedPassword, 3, "Activate"]
+    );
+
+    return res.json({
+      message: "User created successfully",
+      user_id: result.insertId
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
 };

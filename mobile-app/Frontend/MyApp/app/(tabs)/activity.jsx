@@ -214,7 +214,7 @@ export default function ReportsScreen() {
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.slice(0, 5).map((item) => (
+            {notifications.map((item) => (
               <TouchableOpacity
                 key={item.id}
                 style={[

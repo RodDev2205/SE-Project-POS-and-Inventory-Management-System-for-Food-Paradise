@@ -59,8 +59,9 @@ const InventoryManagement = () => {
     setInventory((prev) => [newIngredient, ...prev]);
   };
 
+  // Low stock is determined by units (quantity) compared to low_stock_threshold
   const lowStockItems = inventory.filter(
-    (item) => item.total_servings <= item.low_stock_threshold
+    (item) => Number(item.quantity) <= Number(item.low_stock_threshold)
   );
 
   if (loading) {
@@ -123,8 +124,10 @@ const InventoryManagement = () => {
 
             <tbody className="text-sm text-gray-700">
               {inventory.map((item) => {
-                const isLow =
-                  item.total_servings <= item.low_stock_threshold;
+                const qty = Number(item.quantity || 0);
+                const threshold = Number(item.low_stock_threshold || 0);
+                const isNoStock = qty <= 0 || item.status === 'out_of_stock';
+                const isLow = !isNoStock && qty <= threshold;
 
                 return (
                   <tr
@@ -149,26 +152,30 @@ const InventoryManagement = () => {
                       <div className="flex items-center gap-2">
                         <span
                           className={`font-semibold ${
-                            isLow ? "text-red-600" : "text-gray-800"
+                            isNoStock ? "text-gray-400" : isLow ? "text-red-600" : "text-gray-800"
                           }`}
                         >
                           {item.total_servings}
                         </span>
 
-                        {isLow && (
+                        {isNoStock ? (
+                          <span className="text-xs text-white flex items-center gap-1 px-2 py-0.5 bg-gray-600 rounded-full">
+                            No Stock
+                          </span>
+                        ) : isLow ? (
                           <span className="text-xs text-red-500 flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-full">
                             <AlertTriangle size={14} /> Low
                           </span>
-                        )}
+                        ) : null}
                       </div>
                     </td>
 
                     <td>
                       <span
                         className={`px-4 py-1.5 rounded-full text-xs font-medium ${
-                          item.status === "active"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-200 text-gray-600"
+                          item.status === "available" ? "bg-green-100 text-green-700" :
+                          item.status === "low_stock" ? "bg-yellow-100 text-yellow-800" :
+                          item.status === "out_of_stock" ? "bg-gray-600 text-white" : "bg-gray-200 text-gray-600"
                         }`}
                       >
                         {item.status}

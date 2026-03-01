@@ -1,4 +1,5 @@
 import { db } from "../config/db.js";
+import { io } from "../../server.js"; // notify dashboard updates
 
 export const addIngredient = async (req, res) => {
   try {
@@ -15,13 +16,18 @@ export const addIngredient = async (req, res) => {
       (item_name, quantity, servings_per_unit, total_servings, low_stock_threshold, status, branch_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
+    // Determine status based on quantity and threshold
+    const effectiveStatus = (Number(quantity) === 0)
+      ? 'out_of_stock'
+      : (Number(quantity) <= Number(low_stock_threshold) ? 'low_stock' : (status || 'available'));
+
     const values = [
       item_name,
       quantity,
       servings_per_unit,
       total_servings,
       low_stock_threshold,
-      status,
+      effectiveStatus,
       branch_id,
     ];
 
@@ -29,6 +35,8 @@ export const addIngredient = async (req, res) => {
     const [result] = await db.execute(query, values);
 
     console.log("Ingredient inserted with ID:", result.insertId);
+    // notify dashboard
+    io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });
     res.status(201).json({ message: "Ingredient added successfully", id: result.insertId });
   } catch (error) {
     console.error("DB/CATCH ERROR:", error);
@@ -139,10 +147,11 @@ export const getLowStockCount = async (req, res) => {
 
     // global count for superadmin
     if (req.user && req.user.role_id === 3) {
-      query = `SELECT COUNT(*) as count FROM inventory WHERE total_servings <= low_stock_threshold`;
+      // threshold now applies to quantity/unit rather than servings
+      query = `SELECT COUNT(*) as count FROM inventory WHERE quantity <= low_stock_threshold`;
     } else {
       const branch_id = req.user.branch_id;
-      query = `SELECT COUNT(*) as count FROM inventory WHERE branch_id = ? AND total_servings <= low_stock_threshold`;
+      query = `SELECT COUNT(*) as count FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold`;
       params = [branch_id];
     }
 
@@ -176,13 +185,18 @@ export const editIngredientById = async (req, res) => {
       SET item_name = ?, quantity = ?, servings_per_unit = ?, total_servings = ?, low_stock_threshold = ?, status = ?
       WHERE inventory_id = ? AND branch_id = ?
     `;
+    // Recompute status so threshold rules are always enforced
+    const effectiveStatus = (Number(quantity) === 0)
+      ? 'out_of_stock'
+      : (Number(quantity) <= Number(low_stock_threshold) ? 'low_stock' : (status || 'available'));
+
     const values = [
       item_name,
       quantity,
       servings_per_unit,
       total_servings,
       low_stock_threshold,
-      status,
+      effectiveStatus,
       id,
       branch_id,
     ];
@@ -192,6 +206,11 @@ export const editIngredientById = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Ingredient not found or no permission" });
     }
+
+    // notify dashboard for branch
+    io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });
+    // also send globally
+    io.emit('dashboardUpdate', { branch_id });
 
     res.status(200).json({
       message: "Ingredient updated successfully",

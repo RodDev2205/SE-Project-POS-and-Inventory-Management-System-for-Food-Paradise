@@ -3,8 +3,9 @@ import bcrypt from "bcrypt";
 
 export const createCashier = async (req, res) => {
   try {
-    const adminId = req.user.id; 
-    const { full_name, username, password } = req.body; // match frontend
+    const adminId = req.user.user_id; // from JWT
+    const branchId = req.user.branch_id; // from JWT
+    const { full_name, username, password } = req.body;
 
     if (!full_name || !username || !password) {
       return res.status(400).json({ error: "All fields are required" });
@@ -22,9 +23,9 @@ export const createCashier = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.query(
-      `INSERT INTO users (full_name, username, password, role_id, status, created_by)
-       VALUES (?, ?, ?, 1, 'Activate', ?)`,
-      [full_name, username, hashedPassword, adminId]
+      `INSERT INTO users (full_name, username, password, role_id, status, branch_id, created_by)
+       VALUES (?, ?, ?, 1, 'Activate', ?, ?)`,
+      [full_name, username, hashedPassword, branchId, adminId]
     );
 
     res.json({ message: "Cashier created successfully" });
@@ -37,6 +38,8 @@ export const createCashier = async (req, res) => {
 
 export const getCashiers = async (req, res) => {
   try {
+    const branchId = req.user.branch_id; // from JWT
+
     const [rows] = await db.query(`
       SELECT 
         user_id as id,
@@ -46,9 +49,9 @@ export const getCashiers = async (req, res) => {
         status,
         password
       FROM users
-      WHERE role_id = 1
+      WHERE role_id = 1 AND branch_id = ?
       ORDER BY user_id DESC
-    `);
+    `, [branchId]);
 
     res.json(rows);
 
@@ -59,16 +62,17 @@ export const getCashiers = async (req, res) => {
 
 export const toggleCashierStatus = async (req, res) => {
   try {
-    const { id } = req.params; // cashier id from frontend
+    const { id } = req.params;
+    const branchId = req.user.branch_id; // from JWT
 
-    // Get current status
+    // Get current status (ensure cashier belongs to this branch)
     const [rows] = await db.query(
-      "SELECT status FROM users WHERE user_id = ? AND role_id = 1",
-      [id]
+      "SELECT status FROM users WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
+      [id, branchId]
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ error: "Cashier not found" });
+      return res.status(404).json({ error: "Cashier not found or access denied" });
     }
 
     const currentStatus = rows[0].status;
@@ -76,8 +80,8 @@ export const toggleCashierStatus = async (req, res) => {
 
     // Update status
     await db.query(
-      "UPDATE users SET status = ? WHERE user_id = ?",
-      [newStatus, id]
+      "UPDATE users SET status = ? WHERE user_id = ? AND branch_id = ?",
+      [newStatus, id, branchId]
     );
 
     res.json({ message: "Status updated successfully", status: newStatus });
@@ -91,6 +95,7 @@ export const toggleCashierStatus = async (req, res) => {
 export const updateCashier = async (req, res) => {
   try {
     const { id } = req.params;
+    const branchId = req.user.branch_id; // from JWT
     const { full_name, username } = req.body;
 
     if (!full_name || !username) {
@@ -107,11 +112,15 @@ export const updateCashier = async (req, res) => {
       return res.status(400).json({ error: "Username already taken" });
     }
 
-    // Update user
-    await db.query(
-      "UPDATE users SET full_name = ?, username = ? WHERE user_id = ? AND role_id = 1",
-      [full_name, username, id]
+    // Update user (ensure cashier belongs to this branch)
+    const [result] = await db.query(
+      "UPDATE users SET full_name = ?, username = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
+      [full_name, username, id, branchId]
     );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Cashier not found or access denied" });
+    }
 
     res.json({ message: "Cashier updated successfully", full_name, username, id });
   } catch (err) {
@@ -121,7 +130,8 @@ export const updateCashier = async (req, res) => {
 
 export const updateCashierPassword = async (req, res) => {
   try {
-    const { id } = req.params; // cashier id
+    const { id } = req.params;
+    const branchId = req.user.branch_id; // from JWT
     const { password } = req.body;
 
     if (!password) {
@@ -131,12 +141,12 @@ export const updateCashierPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await db.query(
-      "UPDATE users SET password = ? WHERE user_id = ? AND role_id = 1",
-      [hashedPassword, id]
+      "UPDATE users SET password = ? WHERE user_id = ? AND role_id = 1 AND branch_id = ?",
+      [hashedPassword, id, branchId]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Cashier not found" });
+      return res.status(404).json({ error: "Cashier not found or access denied" });
     }
 
     res.json({ message: "Password updated successfully", id });
