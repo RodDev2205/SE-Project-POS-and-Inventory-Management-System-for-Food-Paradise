@@ -22,4 +22,11 @@ const createSuperAdmin = async () => {
   process.exit(); // end script
 };
 
-createSuperAdmin();*/
+createSuperAdmin();
+
+import bcrypt from "bcrypt";
+
+const pin = "84729318";
+const hashedPin = await bcrypt.hash(pin, 10);
+
+console.log(hashedPin);*/

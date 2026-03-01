@@ -6,6 +6,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppTextInput from '@/components/AppText';
@@ -17,8 +18,8 @@ export default function ForgotPasswordForm({
   onSubmit,
   loading = false,
 }) {
-  const [step, setStep] = useState(1); // 1: email, 2: verification code, 3: new password
-  const [email, setEmail] = useState('');
+  const [step, setStep] = useState(1); // 1: username, 2: verification code, 3: new password
+  const [username, setUsername] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,11 +29,10 @@ export default function ForgotPasswordForm({
   const validateStep = () => {
     const e = {};
     if (step === 1) {
-      if (!email.trim()) e.email = 'Email is required';
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Invalid email format';
+      if (!username.trim()) e.username = 'Username is required';
     } else if (step === 2) {
       if (!verificationCode.trim()) e.verificationCode = 'Verification code is required';
-      if (verificationCode.length < 6) e.verificationCode = 'Verification code must be 6 numbers';
+      if (verificationCode.length < 8) e.verificationCode = 'Verification code must be 8 digits';
     } else if (step === 3) {
       if (!newPassword) e.newPassword = 'New password is required';
       if (newPassword.length < 6) e.newPassword = 'Password must be at least 6 characters';
@@ -42,28 +42,47 @@ export default function ForgotPasswordForm({
     return e;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const e = validateStep();
     if (Object.keys(e).length > 0) {
       setErrors(e);
       return;
     }
     setErrors({});
-    
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      handleSubmit();
-    }
-  };
 
-  const handleSubmit = () => {
-    onSubmit({
-      email: email.trim(),
-      verificationCode: verificationCode.trim(),
-      newPassword: newPassword,
-    });
-    setSubmitted(true);
+    try {
+      if (step === 1) {
+        // start recovery; check if username is valid before advancing
+        const result = await onSubmit({ username: username.trim() });
+        // Only advance if backend confirms username exists and is superadmin
+        if (result && result.isValid === true) {
+          setStep(2);
+        } else {
+          // If isValid is false or missing, don't advance
+          throw new Error('Invalid credentials');
+        }
+        return;
+      }
+
+      if (step === 2) {
+        // verify PIN; parent should return { token } on success
+        const result = await onSubmit({ username: username.trim(), verificationCode: verificationCode.trim() });
+        if (result && result.token) {
+          setStep(3);
+        } else {
+          throw new Error('Invalid credentials');
+        }
+        return;
+      }
+
+      // step === 3: perform reset
+      await onSubmit({ username: username.trim(), verificationCode: verificationCode.trim(), newPassword });
+      setSubmitted(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Request failed';
+      Alert.alert('Error', message);
+      // keep the user on the same step
+    }
   };
 
   const handleBack = () => {
@@ -97,7 +116,7 @@ export default function ForgotPasswordForm({
             title="Back to Login"
             onPress={() => {
               setSubmitted(false);
-              setEmail('');
+              setUsername('');
               setVerificationCode('');
               setNewPassword('');
               setConfirmPassword('');
@@ -127,9 +146,9 @@ export default function ForgotPasswordForm({
   const getStepSubtitle = () => {
     switch (step) {
       case 1:
-        return 'Enter your email address';
+        return 'Enter your username';
       case 2:
-        return 'Enter the verification code sent to your email';
+        return 'Enter the 8-digit recovery PIN for your account';
       case 3:
         return 'Create a new password';
       default:
@@ -164,16 +183,15 @@ export default function ForgotPasswordForm({
 
         <Text style={styles.subheading}>{getStepSubtitle()}</Text>
 
-        {/* Step 1: Email */}
+        {/* Step 1: Username */}
         {step === 1 && (
           <AppTextInput
-            label="Email Address"
-            placeholder="Enter your email"
-            value={email}
-            onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
-            error={errors.email}
+            label="Username"
+            placeholder="Enter your username"
+            value={username}
+            onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
+            error={errors.username}
             autoCapitalize="none"
-            keyboardType="email-address"
             returnKeyType="next"
           />
         )}
@@ -183,12 +201,12 @@ export default function ForgotPasswordForm({
           <View>
             <AppTextInput
               label="Verification Code"
-              placeholder="Enter 6-digit code"
+              placeholder="Enter 8-digit code"
               value={verificationCode}
               onChangeText={(t) => { setVerificationCode(t); setErrors(e => ({ ...e, verificationCode: undefined })); }}
               error={errors.verificationCode}
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={8}
               returnKeyType="next"
             />
             <Text style={styles.helperText}>

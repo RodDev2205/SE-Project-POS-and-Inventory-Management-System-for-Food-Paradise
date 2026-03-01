@@ -6,6 +6,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppTextInput from '@/components/AppText';
@@ -21,7 +22,6 @@ export default function LoginForm({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors]     = useState({});
 
   const validate = () => {
     const e = {};
@@ -33,10 +33,14 @@ export default function LoginForm({
   const handleLogin = () => {
     const e = validate();
     if (Object.keys(e).length > 0) {
-      setErrors(e);
+      // show a single alert instead of inline messages
+      Alert.alert(
+        'Validation Error',
+        Object.values(e).join('\n')
+      );
       return;
     }
-    setErrors({});
+
     onLogin(username.trim(), password);
   };
 
@@ -61,8 +65,7 @@ export default function LoginForm({
           label="Username"
           placeholder="Enter username here"
           value={username}
-          onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
-          error={errors.username}
+          onChangeText={(t) => setUsername(t)}
           autoCapitalize="none"
           returnKeyType="next"
         />
@@ -72,8 +75,7 @@ export default function LoginForm({
             label="Password"
             placeholder="Enter password here"
             value={password}
-            onChangeText={(t) => { setPassword(t); setErrors(e => ({ ...e, password: undefined })); }}
-            error={errors.password}
+            onChangeText={(t) => setPassword(t)}
             secureTextEntry={!showPassword}
             returnKeyType="done"
             onSubmitEditing={handleLogin}
