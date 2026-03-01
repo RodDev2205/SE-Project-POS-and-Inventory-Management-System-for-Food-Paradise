@@ -149,7 +149,7 @@ export default function AdminReportsPage() {
     },
     {
       title: "Completed Orders",
-      value: todaySales?.transaction_count || 0,
+      value: todaySales?.completed_count || 0,
     },
   ];
 

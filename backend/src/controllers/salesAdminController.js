@@ -137,11 +137,11 @@ export const getSalesTodayByBranch = async (req, res) => {
 
     res.json({
       total_sales: Number(result?.total_sales || 0),
+      transaction_count: result?.all_transaction_count || 0,
       completed_count: result?.completed_count || 0,
       partial_refunded_count: result?.partial_refunded_count || 0,
       refunded_count: result?.refunded_count || 0,
       voided_count: result?.voided_count || 0,
-      all_transaction_count: result?.all_transaction_count || 0,
       max_order_value: Number(result?.max_order_value || 0),
       min_order_value: Number(result?.min_order_value || 0),
       avg_order_value: Number(result?.avg_order_value || 0),
