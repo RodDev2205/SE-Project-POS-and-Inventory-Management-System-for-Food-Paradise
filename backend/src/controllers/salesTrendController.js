@@ -38,6 +38,10 @@ export async function getSalesTrend(req, res) {
     // determine grouping expression
     let groupExpr;
     switch (period) {
+      case 'hourly':
+        // group by hour within the date range; include date for multi‑day requests
+        groupExpr = "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')";
+        break;
       case 'weekly':
         // ISO week number (1-53)
         groupExpr = `CONCAT(YEAR(created_at), '-', LPAD(WEEK(created_at,1),2,'0'))`;

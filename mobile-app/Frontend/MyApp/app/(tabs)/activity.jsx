@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Modal,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -14,53 +15,174 @@ import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import BarChart from '@/components/Dashboard/BarChart';
 import { NotificationContext } from '@/context/NotificationContext';
 
-const CHART_DATA = [
-  { day: 'M', value: 45 },
-  { day: 'T', value: 65 },
-  { day: 'W', value: 80 },
-  { day: 'T', value: 85 },
-  { day: 'F', value: 70 },
-  { day: 'S', value: 95 },
-  { day: 'S', value: 75 },
-];
+// placeholder data removed; chart will load from API
+
 
 export default function ReportsScreen() {
-  const [selectedBranch, setSelectedBranch] = useState('branch1');
-  const [selectedFormat, setSelectedFormat] = useState('daily');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [branches, setBranches] = useState([]);
+  const [branchDropdownVisible, setBranchDropdownVisible] = useState(false);
+  const [selectedTimeRange, setSelectedTimeRange] = useState('today');
+  const [timeRangeDropdownVisible, setTimeRangeDropdownVisible] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const { notifications, toggleNotificationRead, unreadCount } = useContext(NotificationContext);
+  const [chartData, setChartData] = useState([]);
+  const [summary, setSummary] = useState({
+    total_sales: 0,
+    transaction_count: 0,
+    partial_refunded_count: 0,
+    refunded_count: 0,
+    voided_count: 0,
+  });
+  const { notifications, toggleNotificationRead, unreadCount, auth } = useContext(NotificationContext);
 
-  const getDaysInMonth = (date) => {
-    return new Array(42).fill(null).map((_, i) => {
-      const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-      const dayOfMonth = i - firstDay + 1;
-      if (dayOfMonth < 1 || dayOfMonth > new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()) {
-        return null;
-      }
-      return new Date(date.getFullYear(), date.getMonth(), dayOfMonth);
-    });
-  };
-
-  const formatDateDisplay = (date) => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (date.toDateString() === today.toDateString()) return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    setShowCalendar(false);
-  };
+  const TIME_RANGE_OPTIONS = [
+    { id: 'today', label: 'Today' },
+    { id: 'yesterday', label: 'Yesterday' },
+    { id: 'week', label: 'This Week' },
+    { id: 'month', label: 'This Month' },
+    { id: 'year', label: 'This Year' },
+  ];
 
   const handleNotifications = () => {
     setNotificationsVisible(true);
   };
+
+  // fetch branches from backend
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
+      });
+      if (!res.ok) throw new Error(`Failed to fetch branches (${res.status})`);
+      const data = await res.json();
+      setBranches(data || []);
+      if (data && data.length) setSelectedBranch(data[0].branch_id.toString());
+    } catch (err) {
+      console.error('Failed to load branches:', err.message || err);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranches();
+  }, []);
+
+  // re-fetch chart whenever branch or time range changes
+  useEffect(() => {
+    const fetchChart = async () => {
+      if (!auth?.token || !selectedBranch) return;
+
+      let period;
+      let startDate;
+      let endDate;
+      const now = new Date();
+      switch (selectedTimeRange) {
+        case 'today':
+          period = 'hourly';
+          startDate = now.toISOString().slice(0, 10);
+          endDate = startDate;
+          break;
+        case 'yesterday':
+          period = 'hourly';
+          const y = new Date(now);
+          y.setDate(y.getDate() - 1);
+          startDate = y.toISOString().slice(0, 10);
+          endDate = startDate;
+          break;
+        case 'week':
+          period = 'weekly';
+          const day = now.getDay();
+          const mon = new Date(now);
+          mon.setDate(now.getDate() - ((day + 6) % 7));
+          const sun = new Date(mon);
+          sun.setDate(mon.getDate() + 6);
+          startDate = mon.toISOString().slice(0, 10);
+          endDate = sun.toISOString().slice(0, 10);
+          break;
+        case 'month':
+          period = 'monthly';
+          const first = new Date(now.getFullYear(), now.getMonth(), 1);
+          const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          startDate = first.toISOString().slice(0, 10);
+          endDate = last.toISOString().slice(0, 10);
+          break;
+        case 'year':
+          period = 'yearly';
+          const start = new Date(now.getFullYear(), 0, 1);
+          const end = new Date(now.getFullYear(), 11, 31);
+          startDate = start.toISOString().slice(0, 10);
+          endDate = end.toISOString().slice(0, 10);
+          break;
+        default:
+          period = 'daily';
+      }
+
+      try {
+        let url = `http://10.181.206.201:5200/api/sales-superadmin/sales-trend?period=${period}&branchId=${
+          selectedBranch || 'all'
+        }`;
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+        const resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${auth.token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const arr = await resp.json();
+        const chartArr = arr.map((r) => {
+          let label = r.period_key;
+          if (period === 'hourly') {
+            const d = new Date(label);
+            label = `${d.getHours()}:00`;
+          } else if (period === 'weekly') {
+            label = label.split('-')[1];
+          } else if (period === 'monthly') {
+            const monthNum = parseInt(label.split('-')[1], 10);
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            label = monthNames[monthNum - 1] || label;
+          } else if (period === 'yearly') {
+            // label already year
+          }
+          const val = typeof r.total_sales === 'number' ? r.total_sales : Number(r.total_sales) || 0;
+          return { day: label, value: val };
+        });
+        setChartData(chartArr);
+
+        // fetch KPI summary for the same filters
+        try {
+          let kpiUrl = `http://10.181.206.201:5200/api/sales-superadmin/kpis?branchId=${
+            selectedBranch || 'all'
+          }`;
+          if (startDate) kpiUrl += `&startDate=${startDate}`;
+          if (endDate) kpiUrl += `&endDate=${endDate}`;
+          const kpiResp = await fetch(kpiUrl, {
+            headers: {
+              Authorization: `Bearer ${auth.token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (kpiResp.ok) {
+            const kpiData = await kpiResp.json();
+            setSummary({
+              total_sales: kpiData.total_sales || 0,
+              transaction_count: kpiData.transaction_count || 0,
+              partial_refunded_count: kpiData.partial_refunded_count || 0,
+              refunded_count: kpiData.refunded_count || 0,
+              voided_count: kpiData.voided_count || 0,
+            });
+          } else {
+            console.error('Failed to fetch summary', kpiResp.status);
+          }
+        } catch (err) {
+          console.error('Error fetching summary data:', err.message || err);
+        }
+      } catch (err) {
+        console.error('Error fetching chart data:', err.message || err);
+      }
+    };
+
+    fetchChart();
+  }, [selectedBranch, selectedTimeRange, auth]);
 
   const getIconColor = (type) => {
     const colorMap = {
@@ -102,77 +224,114 @@ export default function ReportsScreen() {
         {/* Title */}
         <Text style={styles.pageTitle}>Reports</Text>
 
-        {/* Branch selector */}
-        <View style={styles.branchSelector}>
+        {/* Branch selector dropdown */}
+        <View style={styles.timeRangeContainer}>
           <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch1' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch1')}
+            style={styles.timeRangeButton}
+            onPress={() => setBranchDropdownVisible(!branchDropdownVisible)}
           >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch1' && styles.branchTabTextActive]}>
-              Branch 1
+            <Text style={styles.timeRangeButtonText} numberOfLines={1} ellipsizeMode="tail">
+              {branches.find((b) => b.branch_id.toString() === selectedBranch)?.branch_name || 'Select Branch'}
             </Text>
+            <Ionicons
+              name={branchDropdownVisible ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.primaryGreen}
+            />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.branchTab, selectedBranch === 'branch2' && styles.branchTabActive]}
-            onPress={() => setSelectedBranch('branch2')}
-          >
-            <Text style={[styles.branchTabText, selectedBranch === 'branch2' && styles.branchTabTextActive]}>
-              Branch 2
-            </Text>
-          </TouchableOpacity>
+
+          {branchDropdownVisible && (
+            <View style={[styles.timeRangeDropdown, { maxHeight: 300 }]}>
+              <ScrollView
+                style={{ flexGrow: 0 }}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
+                {branches.map((b) => (
+                  <TouchableOpacity
+                    key={b.branch_id}
+                    style={[
+                      styles.timeRangeOption,
+                      selectedBranch === b.branch_id.toString() && styles.timeRangeOptionActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedBranch(b.branch_id.toString());
+                      setBranchDropdownVisible(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.timeRangeOptionText,
+                        selectedBranch === b.branch_id.toString() && styles.timeRangeOptionTextActive,
+                      ]}
+                    >
+                      {b.branch_name}
+                    </Text>
+                    {selectedBranch === b.branch_id.toString() && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primaryGreen} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {/* Heading */}
         <Text style={styles.sectionHeading}>
-          Viewing: {selectedBranch === 'branch1' ? 'Branch 1' : 'Branch 2'} {selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)} performance
+          Viewing: {branches.find((b) => b.branch_id.toString() === selectedBranch)?.branch_name || 'Branch'} {TIME_RANGE_OPTIONS.find(o => o.id === selectedTimeRange)?.label} Report
         </Text>
 
-        {/* Date picker row */}
-        <View style={styles.row}>
-          <Text style={styles.label}>Date:</Text>
-          <TouchableOpacity 
-            style={styles.datePickerBox}
-            onPress={() => setShowCalendar(true)}
+        {/* Time Range Dropdown */}
+        <View style={styles.timeRangeContainer}>
+          <TouchableOpacity
+            style={styles.timeRangeButton}
+            onPress={() => setTimeRangeDropdownVisible(!timeRangeDropdownVisible)}
           >
-            <Text style={styles.dateText}>{formatDateDisplay(selectedDate)}</Text>
-            <Ionicons name="calendar" size={16} color={Colors.primaryGreen} />
+            <Text style={styles.timeRangeButtonText}>
+              {TIME_RANGE_OPTIONS.find(o => o.id === selectedTimeRange)?.label}
+            </Text>
+            <Ionicons
+              name={timeRangeDropdownVisible ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.primaryGreen}
+            />
           </TouchableOpacity>
-        </View>
 
-        {/* Format selector */}
-        <View style={[styles.row, { marginTop: 12 }]}>
-          <Text style={styles.label}>Format:</Text>
-          <View style={styles.formatButtons}>
-            <TouchableOpacity
-              style={[styles.formatBtn, selectedFormat === 'daily' && styles.formatBtnActive]}
-              onPress={() => setSelectedFormat('daily')}
-            >
-              <Text style={[styles.formatBtnText, selectedFormat === 'daily' && styles.formatBtnTextActive]}>
-                Daily
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.formatBtn, selectedFormat === 'weekly' && styles.formatBtnActive]}
-              onPress={() => setSelectedFormat('weekly')}
-            >
-              <Text style={[styles.formatBtnText, selectedFormat === 'weekly' && styles.formatBtnTextActive]}>
-                Weekly
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.formatBtn, selectedFormat === 'monthly' && styles.formatBtnActive]}
-              onPress={() => setSelectedFormat('monthly')}
-            >
-              <Text style={[styles.formatBtnText, selectedFormat === 'monthly' && styles.formatBtnTextActive]}>
-                Monthly
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {timeRangeDropdownVisible && (
+            <View style={styles.timeRangeDropdown}>
+              {TIME_RANGE_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.timeRangeOption,
+                    selectedTimeRange === option.id && styles.timeRangeOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedTimeRange(option.id);
+                    setTimeRangeDropdownVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.timeRangeOptionText,
+                      selectedTimeRange === option.id && styles.timeRangeOptionTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                  {selectedTimeRange === option.id && (
+                    <Ionicons name="checkmark" size={18} color={Colors.primaryGreen} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Chart */}
         <View style={styles.chartWrapper}>
-          <BarChart data={CHART_DATA} />
+          <BarChart data={chartData} />
         </View>
 
         {/* Performance Detail Summary */}
@@ -182,27 +341,23 @@ export default function ReportsScreen() {
         <View style={styles.table}>
           <View style={styles.tableRow}>
             <Text style={styles.tableLabel}>Overall Sales:</Text>
-            <Text style={styles.tableValue}>₱ 4,932.22</Text>
+            <Text style={styles.tableValue}>₱ {summary.total_sales.toFixed(2)}</Text>
           </View>
           <View style={styles.tableRow}>
-            <Text style={styles.tableLabel}>Total Orders:</Text>
-            <Text style={styles.tableValue}>75 Orders</Text>
+            <Text style={styles.tableLabel}>Total Transactions:</Text>
+            <Text style={styles.tableValue}>{summary.transaction_count} Orders</Text>
           </View>
           <View style={styles.tableRow}>
-            <Text style={styles.tableLabel}>Due In-orders:</Text>
-            <Text style={styles.tableValue}>37</Text>
-          </View>
-          <View style={styles.tableRow}>
-            <Text style={styles.tableLabel}>Rejected orders:</Text>
-            <Text style={styles.tableValue}>25</Text>
+            <Text style={styles.tableLabel}>Partial Refunded:</Text>
+            <Text style={styles.tableValue}>{summary.partial_refunded_count}</Text>
           </View>
           <View style={styles.tableRow}>
             <Text style={styles.tableLabel}>Refunded:</Text>
-            <Text style={styles.tableValue}>13</Text>
+            <Text style={styles.tableValue}>{summary.refunded_count}</Text>
           </View>
           <View style={styles.tableRow}>
-            <Text style={styles.tableLabel}>Voided Items:</Text>
-            <Text style={styles.tableValue}>5</Text>
+            <Text style={styles.tableLabel}>Voided Orders:</Text>
+            <Text style={styles.tableValue}>{summary.voided_count}</Text>
           </View>
         </View>
       </ScrollView>
@@ -253,66 +408,6 @@ export default function ReportsScreen() {
         </View>
       )}
 
-      {/* Calendar Modal */}
-      <Modal
-        visible={showCalendar}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowCalendar(false)}
-      >
-        <View style={styles.calendarOverlay}>
-          <View style={styles.calendarModal}>
-            <View style={styles.calendarHeader}>
-              <TouchableOpacity onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1))}>
-                <Ionicons name="chevron-back" size={24} color={Colors.primaryGreen} />
-              </TouchableOpacity>
-              <Text style={styles.calendarTitle}>
-                {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </Text>
-              <TouchableOpacity onPress={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1))}>
-                <Ionicons name="chevron-forward" size={24} color={Colors.primaryGreen} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.calendarWeekDays}>
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <Text key={day} style={styles.weekDay}>{day}</Text>
-              ))}
-            </View>
-
-            <View style={styles.calendarDays}>
-              {getDaysInMonth(selectedDate).map((date, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.calendarDay,
-                    !date && styles.calendarDayEmpty,
-                    date && date.toDateString() === selectedDate.toDateString() && styles.calendarDaySelected,
-                  ]}
-                  onPress={() => date && handleDateSelect(date)}
-                  disabled={!date}
-                >
-                  {date && (
-                    <Text style={[
-                      styles.calendarDayText,
-                      date.toDateString() === selectedDate.toDateString() && styles.calendarDaySelectedText,
-                    ]}>
-                      {date.getDate()}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity 
-              style={styles.calendarCloseBtn}
-              onPress={() => setShowCalendar(false)}
-            >
-              <Text style={styles.calendarCloseBtnText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -394,7 +489,61 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#111',
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  timeRangeContainer: {
+    marginBottom: 16,
+    zIndex: 10,
+  },
+  timeRangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  timeRangeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryGreen,
+  },
+  timeRangeDropdown: {
+    marginTop: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  timeRangeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  timeRangeOptionActive: {
+    backgroundColor: Colors.primaryGreen + '15',
+  },
+  timeRangeOptionText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  timeRangeOptionTextActive: {
+    fontWeight: '600',
+    color: Colors.primaryGreen,
   },
   row: {
     flexDirection: 'row',
@@ -406,48 +555,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     width: 50,
-  },
-  datePickerBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: Colors.primaryGreen,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  dateText: {
-    fontSize: 13,
-    color: '#333',
-  },
-  formatButtons: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  formatBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-  },
-  formatBtnActive: {
-    backgroundColor: '#f0f0f0',
-    borderColor: '#999',
-  },
-  formatBtnText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  formatBtnTextActive: {
-    color: '#111',
-    fontWeight: '600',
   },
   chartWrapper: {
     marginTop: 16,
@@ -589,86 +696,6 @@ const styles = StyleSheet.create({
   notificationIconBadgeText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '600',
-  },
-  // Calendar styles
-  calendarOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  calendarModal: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    width: '85%',
-    maxWidth: 350,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  calendarTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.primaryGreen,
-  },
-  calendarWeekDays: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  weekDay: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    width: '14.2%',
-    textAlign: 'center',
-  },
-  calendarDays: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  calendarDay: {
-    width: '14.2%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  calendarDayEmpty: {
-    backgroundColor: 'transparent',
-  },
-  calendarDaySelected: {
-    backgroundColor: Colors.primaryGreen,
-    borderRadius: 8,
-  },
-  calendarDayText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  calendarDaySelectedText: {
-    color: '#fff',
-  },
-  calendarCloseBtn: {
-    backgroundColor: Colors.primaryGreen,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  calendarCloseBtnText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
   },
 });

@@ -37,12 +37,19 @@ export async function getKpis(req, res) {
     const startSql = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')} 00:00:00`;
     const endSql = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')} 23:59:59`;
 
-    // Build WHERE clause: always filter by date and status; optionally by branch
-    const whereClause = branchId && branchId !== 'all' 
+    // Build WHERE clause for completed/amount queries (KPIs use only completed orders)
+    const whereClause = branchId && branchId !== 'all'
       ? `status = 'Completed' AND created_at BETWEEN ? AND ? AND branch_id = ?`
       : `status = 'Completed' AND created_at BETWEEN ? AND ?`;
-    
-    const params = branchId && branchId !== 'all' 
+    const params = branchId && branchId !== 'all'
+      ? [startSql, endSql, parseInt(branchId)]
+      : [startSql, endSql];
+
+    // build a second clause for status counts which should include all statuses but still respect date/branch
+    const statusClause = branchId && branchId !== 'all'
+      ? `created_at BETWEEN ? AND ? AND branch_id = ?`
+      : `created_at BETWEEN ? AND ?`;
+    const statusParams = branchId && branchId !== 'all'
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
@@ -58,7 +65,20 @@ export async function getKpis(req, res) {
       params
     );
 
-    // 3) Average order value (filtered by branch if selected)
+    // 3) Four status counts (without filtering to Completed so we capture refunds/voids)
+    const [statusRows] = await db.execute(
+      `
+        SELECT
+          SUM(CASE WHEN status = 'Partial Refunded' THEN 1 ELSE 0 END) AS partial_refunded_count,
+          SUM(CASE WHEN status = 'Refunded' THEN 1 ELSE 0 END) AS refunded_count,
+          SUM(CASE WHEN status = 'Voided' THEN 1 ELSE 0 END) AS voided_count
+        FROM transactions
+        WHERE ${statusClause}
+      `,
+      statusParams
+    );
+
+    // 4) Average order value (filtered by branch if selected)
     const [avgRows] = await db.execute(
       `SELECT IFNULL(AVG(total_amount), 0) AS avg_order_value FROM transactions WHERE ${whereClause}`,
       params
@@ -72,6 +92,9 @@ export async function getKpis(req, res) {
 
     const totalSales = Number(totalRows[0].total_sales || 0);
     const transactionCount = Number(countRows[0].transaction_count || 0);
+    const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
+    const refunded = statusRows[0]?.refunded_count || 0;
+    const voided = statusRows[0]?.voided_count || 0;
     const avgOrderValue = Number(avgRows[0].avg_order_value || 0);
     const activeBranches = Number(branchRows[0].active_branches || 0);
 
@@ -87,6 +110,9 @@ export async function getKpis(req, res) {
     return res.json({
       total_sales: totalSales,
       transaction_count: transactionCount,
+      partial_refunded_count: partialRefunded,
+      refunded_count: refunded,
+      voided_count: voided,
       avg_order_value: Number(avgOrderValue.toFixed(2)),
       active_branches: activeBranches,
       avg_transactions_per_day: Number(avgTransactionsPerDay.toFixed(2)),

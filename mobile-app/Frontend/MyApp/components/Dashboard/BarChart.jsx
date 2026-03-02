@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Colors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -8,7 +8,10 @@ const CHART_HEIGHT = 80;
 const Y_LABELS = ['P40k', 'P20k', 'P0'];
 
 export default function BarChart({ data }) {
-  const maxVal = 100;
+  const [activeIndex, setActiveIndex] = useState(null);
+  const maxVal = data && data.length ? Math.max(...data.map(d => d.value)) : 0;
+  // add small padding to avoid zero-height bars
+  const paddedMax = maxVal * 1.1 || 100;
 
   return (
     <View style={styles.wrapper}>
@@ -26,10 +29,21 @@ export default function BarChart({ data }) {
 
           <View style={styles.barsRow}>
             {data.map((item, i) => {
-              const barHeight = (item.value / maxVal) * CHART_HEIGHT;
+              const val = typeof item.value === 'number' ? item.value : 0;
+              const barHeight = (val / paddedMax) * CHART_HEIGHT;
+              const isActive = activeIndex === i;
               return (
                 <View key={i} style={styles.barCol}>
-                  <View style={styles.barBg}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.barBg}
+                    onPress={() => setActiveIndex(isActive ? null : i)}
+                  >
+                    {isActive && (
+                      <View style={styles.tooltip}>
+                        <Text style={styles.tooltipText}>₱{(typeof item.value === 'number' ? item.value : 0).toFixed(2)}</Text>
+                      </View>
+                    )}
                     <View
                       style={[
                         styles.bar,
@@ -39,7 +53,7 @@ export default function BarChart({ data }) {
                         },
                       ]}
                     />
-                  </View>
+                  </TouchableOpacity>
                   <Text style={styles.dayLabel}>{item.day}</Text>
                 </View>
               );
@@ -95,6 +109,19 @@ const styles = StyleSheet.create({
     right: 0,
     gap: 4,
     paddingHorizontal: 4,
+  },
+  tooltip: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: '#000',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  tooltipText: {
+    color: '#fff',
+    fontSize: 10,
   },
   barCol: {
     flex: 1,
