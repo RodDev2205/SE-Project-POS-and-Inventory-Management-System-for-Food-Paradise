@@ -4,21 +4,30 @@ import { Colors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 32;
-const CHART_HEIGHT = 80;
-const Y_LABELS = ['P40k', 'P20k', 'P0'];
+const CHART_HEIGHT = 120;
 
 export default function BarChart({ data }) {
   const [activeIndex, setActiveIndex] = useState(null);
-  const maxVal = data && data.length ? Math.max(...data.map(d => d.value)) : 0;
-  // add small padding to avoid zero-height bars
-  const paddedMax = maxVal * 1.1 || 100;
+  const maxVal = data && data.length ? Math.max(...data.map((d) => d.value)) : 0;
+  const paddedMax = Math.max(1, maxVal * 1.1);
+
+  const topLabel = Math.ceil(paddedMax / 1000) * 1000; // round to nearest 1k
+  const midLabel = Math.round(topLabel / 2);
+  const yLabels = [topLabel, midLabel, 0];
+
+  const formatLabel = (v) => {
+    if (v >= 1000) return `₱${(v / 1000).toFixed(0)}k`;
+    return `₱${v}`;
+  };
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.chartRow}>
         <View style={styles.yAxis}>
-          {Y_LABELS.map((label) => (
-            <Text key={label} style={styles.yLabel}>{label}</Text>
+          {yLabels.map((label) => (
+            <Text key={String(label)} style={styles.yLabel}>
+              {formatLabel(label)}
+            </Text>
           ))}
         </View>
 
@@ -30,26 +39,28 @@ export default function BarChart({ data }) {
           <View style={styles.barsRow}>
             {data.map((item, i) => {
               const val = typeof item.value === 'number' ? item.value : 0;
-              const barHeight = (val / paddedMax) * CHART_HEIGHT;
+              const barHeight = (val / (topLabel || 1)) * CHART_HEIGHT;
               const isActive = activeIndex === i;
+              // place tooltip above the bar (horizontal label)
+              const tooltipBottom = barHeight + 12;
               return (
                 <View key={i} style={styles.barCol}>
                   <TouchableOpacity
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                     style={styles.barBg}
                     onPress={() => setActiveIndex(isActive ? null : i)}
                   >
                     {isActive && (
-                      <View style={styles.tooltip}>
-                        <Text style={styles.tooltipText}>₱{(typeof item.value === 'number' ? item.value : 0).toFixed(2)}</Text>
+                      <View style={[styles.tooltip, { bottom: tooltipBottom }]}> 
+                        <Text style={styles.tooltipText}>₱{(val).toLocaleString()}</Text>
                       </View>
                     )}
                     <View
                       style={[
                         styles.bar,
                         {
-                          height: barHeight,
-                          backgroundColor: Colors.primaryGreen,
+                          height: Math.max(2, barHeight),
+                          backgroundColor: isActive ? Colors.primaryGreenDark : Colors.primaryGreen,
                         },
                       ]}
                     />
@@ -69,20 +80,21 @@ export default function BarChart({ data }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: 4,
+    marginBottom: 12,
+    paddingVertical: 6,
   },
   chartRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
   yAxis: {
-    width: 36,
+    width: 44,
     height: CHART_HEIGHT + 20,
     justifyContent: 'space-between',
     paddingBottom: 20,
   },
   yLabel: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#888',
     textAlign: 'right',
   },
@@ -107,8 +119,7 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 0,
     right: 0,
-    gap: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
   tooltip: {
     position: 'absolute',
@@ -124,29 +135,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   barCol: {
-    flex: 1,
     alignItems: 'center',
     height: CHART_HEIGHT + 20,
     justifyContent: 'flex-end',
+    marginHorizontal: 10,
   },
   barBg: {
-    flex: 1,
-    width: '70%',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   bar: {
-    width: '100%',
-    borderRadius: 3,
+    width: 26,
+    borderRadius: 6,
   },
   dayLabel: {
-    fontSize: 9,
-    color: '#888',
-    marginTop: 3,
-    height: 14,
+    fontSize: 10,
+    color: '#666',
+    marginTop: 10,
+    height: 16,
   },
   divider: {
     height: 1,
     backgroundColor: '#e5e5e5',
     marginTop: 4,
+  },
+  tooltip: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    minWidth: 64,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    zIndex: 9999,
+    elevation: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  tooltipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

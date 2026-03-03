@@ -41,7 +41,7 @@ export default function MessagesScreen() {
       if (!auth?.token) return;
       try {
         setLoading(true);
-        const response = await fetch('http://10.181.206.201:5200/api/chat/branches-with-messages', {
+        const response = await fetch('https://deployment-backend-repo-production.up.railway.app/api/chat/branches-with-messages', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${auth.token}`,

@@ -7,7 +7,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
-  Modal,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,13 +21,13 @@ export default function EmployeesScreen() {
   const [branches, setBranches] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
-  const [branchModalVisible, setBranchModalVisible] = useState(false);
+  const [branchDropdownVisible, setBranchDropdownVisible] = useState(false);
 
   const { auth } = useContext(NotificationContext);
 
   const fetchBranches = async () => {
     try {
-      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+      const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branches', {
         headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
       });
       if (!res.ok) throw new Error('Failed to fetch branches');
@@ -42,9 +41,9 @@ export default function EmployeesScreen() {
   const fetchStaff = async (branchId) => {
     setLoadingStaff(true);
     try {
-      let url = 'http://10.181.206.201:5200/api/superadmin/staff';
+      let url = 'https://deployment-backend-repo-production.up.railway.app/api/superadmin/staff';
       if (branchId && branchId !== 'all') {
-        url = `http://10.181.206.201:5200/api/superadmin/${branchId}/staff`;
+        url = `https://deployment-backend-repo-production.up.railway.app/api/superadmin/${branchId}/staff`;
       }
       const res = await fetch(url, {
         headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
@@ -120,64 +119,87 @@ export default function EmployeesScreen() {
         </Text>
 
         {/* Branch selector dropdown button */}
-        <TouchableOpacity
-          style={styles.dropdownTrigger}
-          onPress={() => setBranchModalVisible(true)}
-        >
-          <Text
-            style={styles.dropdownTriggerText}
-            numberOfLines={1}
-            ellipsizeMode="tail"
+        <View style={styles.timeRangeContainer}>
+          <TouchableOpacity
+            style={styles.timeRangeButton}
+            onPress={() => setBranchDropdownVisible(!branchDropdownVisible)}
           >
-            {selectedBranch === 'all'
-              ? 'All Branches'
-              : branches.find((b) => b.branch_id === selectedBranch)?.branch_name ||
-                'Select Branch'}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={Colors.primaryGreen} />
-        </TouchableOpacity>
-        {/* branch chooser modal */}
-        <Modal
-          visible={branchModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setBranchModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <ScrollView>
+            <Text
+              style={styles.timeRangeButtonText}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {selectedBranch === 'all'
+                ? 'All Branches'
+                : branches.find((b) => b.branch_id === selectedBranch)?.branch_name ||
+                  'Select Branch'}
+            </Text>
+            <Ionicons
+              name={branchDropdownVisible ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.primaryGreen}
+            />
+          </TouchableOpacity>
+
+          {branchDropdownVisible && (
+            <View style={[styles.timeRangeDropdown, { maxHeight: 300 }]}>
+              <ScrollView
+                style={{ flexGrow: 0 }}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
                 {/* All Branches option */}
                 <TouchableOpacity
-                  style={styles.modalItem}
+                  style={[
+                    styles.timeRangeOption,
+                    selectedBranch === 'all' && styles.timeRangeOptionActive,
+                  ]}
                   onPress={() => {
                     setSelectedBranch('all');
-                    setBranchModalVisible(false);
+                    setBranchDropdownVisible(false);
                   }}
                 >
-                  <Text style={styles.modalItemText}>All Branches</Text>
+                  <Text
+                    style={[
+                      styles.timeRangeOptionText,
+                      selectedBranch === 'all' && styles.timeRangeOptionTextActive,
+                    ]}
+                  >
+                    All Branches
+                  </Text>
+                  {selectedBranch === 'all' && (
+                    <Ionicons name="checkmark" size={18} color={Colors.primaryGreen} />
+                  )}
                 </TouchableOpacity>
                 {branches.map((b) => (
                   <TouchableOpacity
                     key={b.branch_id}
-                    style={styles.modalItem}
+                    style={[
+                      styles.timeRangeOption,
+                      selectedBranch === b.branch_id && styles.timeRangeOptionActive,
+                    ]}
                     onPress={() => {
                       setSelectedBranch(b.branch_id);
-                      setBranchModalVisible(false);
+                      setBranchDropdownVisible(false);
                     }}
                   >
-                    <Text style={styles.modalItemText}>{b.branch_name}</Text>
+                    <Text
+                      style={[
+                        styles.timeRangeOptionText,
+                        selectedBranch === b.branch_id && styles.timeRangeOptionTextActive,
+                      ]}
+                    >
+                      {b.branch_name}
+                    </Text>
+                    {selectedBranch === b.branch_id && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primaryGreen} />
+                    )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setBranchModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
+          )}
+        </View>
 
         {/* Users listing (active / deactivated) */}
         {loadingStaff && <ActivityIndicator size="small" color={Colors.primaryGreen} />}
@@ -325,29 +347,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
-  dropdownTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  dropdownTriggerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
   branchTab: {
     flex: 1,
     paddingVertical: 8,
@@ -366,46 +365,59 @@ const styles = StyleSheet.create({
   branchTabTextActive: {
     color: '#fff',
   },
-
-  // branch modal styles
-  modalOverlay: {
-    flex: 1,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  timeRangeContainer: {
+    marginBottom: 16,
+    zIndex: 10,
+  },
+  timeRangeButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  modalContent: {
-    width: '80%',
-    maxHeight: '70%',
+    justifyContent: 'space-between',
     backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
     borderRadius: 8,
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  modalItem: {
+  timeRangeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryGreen,
+  },
+  timeRangeDropdown: {
+    marginTop: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  timeRangeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
   },
-  modalItemText: {
-    fontSize: 16,
-    color: '#333',
+  timeRangeOptionActive: {
+    backgroundColor: Colors.primaryGreen + '15',
   },
-  modalCloseBtn: {
-    marginTop: 12,
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: Colors.primaryGreen,
-  },
-  modalCloseText: {
-    color: '#fff',
+  timeRangeOptionText: {
     fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  timeRangeOptionTextActive: {
+    fontWeight: '600',
+    color: Colors.primaryGreen,
   },
   // employee rows
   employeeRow: {

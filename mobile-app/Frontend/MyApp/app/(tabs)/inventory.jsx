@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +19,7 @@ export default function InventoryStatusScreen() {
   const router = useRouter();
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [branches, setBranches] = useState([]);
-  const [branchModalVisible, setBranchModalVisible] = useState(false);
+  const [branchDropdownVisible, setBranchDropdownVisible] = useState(false);
   const [lowStockItems, setLowStockItems] = useState([]);
   const [otherItems, setOtherItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +36,7 @@ export default function InventoryStatusScreen() {
   const fetchBranches = async () => {
     if (!auth?.token) return;
     try {
-      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+      const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branches', {
         headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
       });
       if (!res.ok) throw new Error('Failed to fetch branches');
@@ -60,7 +59,7 @@ export default function InventoryStatusScreen() {
       let items = [];
       // superadmin can fetch all and we filter by branch
       if (auth?.user?.role_id === 3) {
-        const res = await fetch('http://10.181.206.201:5200/api/inventory/all-inventory', {
+        const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory', {
           headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
         });
         if (!res.ok) throw new Error('Failed to fetch inventory');
@@ -68,7 +67,7 @@ export default function InventoryStatusScreen() {
         items = (data || []).filter((i) => String(i.branch_id) === String(branchId));
       } else {
         // admin: backend will return their branch based on token
-        const res = await fetch('http://10.181.206.201:5200/api/inventory/get-ingredients', {
+        const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients', {
           headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
         });
         if (!res.ok) throw new Error('Failed to fetch inventory');
@@ -93,7 +92,7 @@ export default function InventoryStatusScreen() {
 
     if (!auth?.token) return;
     // connect socket
-      const socket = ioclient('http://10.181.206.201:5200', {
+      const socket = ioclient('https://deployment-backend-repo-production.up.railway.app', {
       auth: { token: auth.token },
       transports: ['websocket'],
     });
@@ -197,49 +196,57 @@ export default function InventoryStatusScreen() {
         </Text>
 
         {/* Branch selector dropdown */}
-        <TouchableOpacity
-          style={styles.dropdownTrigger}
-          onPress={() => setBranchModalVisible(true)}
-        >
-          <Text style={styles.dropdownTriggerText} numberOfLines={1} ellipsizeMode="tail">
-            {selectedBranch
-              ? (branches.find((b) => String(b.branch_id) === String(selectedBranch))?.branch_name || 'Select Branch')
-              : 'Select Branch'}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={Colors.primaryGreen} />
-        </TouchableOpacity>
+        <View style={styles.timeRangeContainer}>
+          <TouchableOpacity
+            style={styles.timeRangeButton}
+            onPress={() => setBranchDropdownVisible(!branchDropdownVisible)}
+          >
+            <Text style={styles.timeRangeButtonText} numberOfLines={1} ellipsizeMode="tail">
+              {branches.find((b) => String(b.branch_id) === String(selectedBranch))?.branch_name || 'Select Branch'}
+            </Text>
+            <Ionicons
+              name={branchDropdownVisible ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.primaryGreen}
+            />
+          </TouchableOpacity>
 
-        <Modal
-          visible={branchModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setBranchModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <ScrollView>
+          {branchDropdownVisible && (
+            <View style={[styles.timeRangeDropdown, { maxHeight: 300 }]}>
+              <ScrollView
+                style={{ flexGrow: 0 }}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
                 {branches.map((b) => (
                   <TouchableOpacity
                     key={b.branch_id}
-                    style={styles.modalItem}
+                    style={[
+                      styles.timeRangeOption,
+                      selectedBranch === b.branch_id && styles.timeRangeOptionActive,
+                    ]}
                     onPress={() => {
                       setSelectedBranch(b.branch_id);
-                      setBranchModalVisible(false);
+                      setBranchDropdownVisible(false);
                     }}
                   >
-                    <Text style={styles.modalItemText}>{b.branch_name}</Text>
+                    <Text
+                      style={[
+                        styles.timeRangeOptionText,
+                        selectedBranch === b.branch_id && styles.timeRangeOptionTextActive,
+                      ]}
+                    >
+                      {b.branch_name}
+                    </Text>
+                    {selectedBranch === b.branch_id && (
+                      <Ionicons name="checkmark" size={18} color={Colors.primaryGreen} />
+                    )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setBranchModalVisible(false)}
-              >
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
+          )}
+        </View>
 
         {/* Low Stock Items section */}
         <View style={styles.section}>
@@ -599,53 +606,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  dropdownTrigger: {
+  timeRangeContainer: {
+    marginBottom: 16,
+    zIndex: 10,
+  },
+  timeRangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  timeRangeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryGreen,
+  },
+  timeRangeDropdown: {
+    marginTop: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  timeRangeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e6e6e6',
-  },
-  dropdownTriggerText: {
-    flex: 1,
-    marginRight: 8,
-    color: '#111',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    padding: 12,
-    maxHeight: '60%',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  modalItem: {
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  modalItemText: {
+  timeRangeOptionActive: {
+    backgroundColor: Colors.primaryGreen + '15',
+  },
+  timeRangeOptionText: {
     fontSize: 14,
-    color: '#111',
+    color: '#333',
+    flex: 1,
   },
-  modalCloseBtn: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCloseText: {
+  timeRangeOptionTextActive: {
+    fontWeight: '600',
     color: Colors.primaryGreen,
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

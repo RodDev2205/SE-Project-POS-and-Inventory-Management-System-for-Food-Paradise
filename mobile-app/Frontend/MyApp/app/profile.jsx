@@ -19,11 +19,51 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState('Super Admin');
-  const [email, setEmail] = useState('superadmin@example.com');
+  const [username, setUsername] = useState('');
   const [role, setRole] = useState('Super Admin');
+  const [createdAt, setCreatedAt] = useState('');
+  const [status, setStatus] = useState('');
 
   // branch/staff management
   const { auth } = useContext(NotificationContext);
+
+  // load profile details from server (fallback to context)
+  useEffect(() => {
+    if (!auth?.token) return;
+    const load = async () => {
+      try {
+        const res = await fetch(
+          `https://deployment-backend-repo-production.up.railway.app/api/users/user/me`,
+          { headers: { Authorization: `Bearer ${auth.token}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setFullName(data.full_name || data.name || '');
+          setUsername(data.username || '');
+          setRole(data.role_name || '');
+          setCreatedAt(data.created_at || '');
+          setStatus(data.status || '');
+          // keep context in sync
+          setAuth((prev) => ({
+            token: prev.token,
+            user: { ...prev.user, ...data, role_name: data.role_name || prev.user?.role_name }
+          }));
+        } else {
+          setFullName(auth.user.full_name || auth.user.name || '');
+          setUsername(auth.user.username || '');
+          setRole(auth.user.role_name || auth.user.role || '');
+          setCreatedAt(auth.user.created_at || '');
+          setStatus(auth.user.status || '');
+        }
+      } catch (err) {
+        console.error('Failed to load profile', err);
+        setFullName(auth.user.full_name || auth.user.name || '');
+        setUsername(auth.user.username || '');
+        setRole(auth.user.role_name || auth.user.role || '');
+      }
+    };
+    load();
+  }, [auth]);
   const [branches, setBranches] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState('all');
   const [staff, setStaff] = useState([]);
@@ -45,7 +85,7 @@ export default function ProfileScreen() {
   // ---------- branches & staff network ----------
   const fetchBranches = async () => {
     try {
-      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+      const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branches', {
         headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
       });
       if (!res.ok) throw new Error('Failed to fetch branches');
@@ -59,9 +99,9 @@ export default function ProfileScreen() {
   const fetchStaff = async (branchId) => {
     setLoadingStaff(true);
     try {
-      let url = 'http://10.181.206.201:5200/api/superadmin/staff';
+      let url = 'https://deployment-backend-repo-production.up.railway.app/api/superadmin/staff';
       if (branchId && branchId !== 'all') {
-        url = `http://10.181.206.201:5200/api/superadmin/${branchId}/staff`;
+        url = `https://deployment-backend-repo-production.up.railway.app/api/superadmin/${branchId}/staff`;
       }
       const res = await fetch(url, {
         headers: auth.token
@@ -123,8 +163,8 @@ export default function ProfileScreen() {
             <View style={styles.divider} />
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Email Address</Text>
-              <Text style={styles.value}>{email}</Text>
+              <Text style={styles.label}>Username</Text>
+              <Text style={styles.value}>{username}</Text>
             </View>
 
             <View style={styles.divider} />
@@ -140,9 +180,9 @@ export default function ProfileScreen() {
 
             <View style={styles.infoRow}>
               <Text style={styles.label}>Account Status</Text>
-              <View style={styles.statusBadge}>
-                <Ionicons name="checkmark-circle" size={14} color={Colors.primaryGreen} />
-                <Text style={styles.statusText}>Active</Text>
+              <View style={[styles.statusBadge, { backgroundColor: status === 'Activate' || status === 1 ? '#e0f2e0' : '#fde0e0' }] }>
+                <Ionicons name={status === 'Activate' || status === 1 ? "checkmark-circle" : "close-circle"} size={14} color={status === 'Activate' || status === 1 ? Colors.primaryGreen : '#d9534f'} />
+                <Text style={[styles.statusText, { color: status === 'Activate' || status === 1 ? Colors.primaryGreen : '#d9534f' }]}>{status === 'Activate' || status === 1 ? 'Active' : 'Inactive'}</Text>
               </View>
             </View>
           </View>
@@ -196,7 +236,7 @@ export default function ProfileScreen() {
           <View style={styles.infoBox}>
             <View style={styles.infoBoxRow}>
               <Text style={styles.infoBoxLabel}>Member Since</Text>
-              <Text style={styles.infoBoxValue}>January 15, 2024</Text>
+              <Text style={styles.infoBoxValue}>{createdAt ? new Date(createdAt).toLocaleDateString() : '-'}</Text>
             </View>
             <View style={styles.infoBoxRow}>
               <Text style={styles.infoBoxLabel}>Last Login</Text>

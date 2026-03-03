@@ -50,7 +50,7 @@ export default function ReportsScreen() {
   // fetch branches from backend
   const fetchBranches = async () => {
     try {
-      const res = await fetch('http://10.181.206.201:5200/api/sales-superadmin/branches', {
+      const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branches', {
         headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined,
       });
       if (!res.ok) throw new Error(`Failed to fetch branches (${res.status})`);
@@ -117,7 +117,7 @@ export default function ReportsScreen() {
       }
 
       try {
-        let url = `http://10.181.206.201:5200/api/sales-superadmin/sales-trend?period=${period}&branchId=${
+        let url = `https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/sales-trend?period=${period}&branchId=${
           selectedBranch || 'all'
         }`;
         if (startDate) url += `&startDate=${startDate}`;
@@ -150,7 +150,7 @@ export default function ReportsScreen() {
 
         // fetch KPI summary for the same filters
         try {
-          let kpiUrl = `http://10.181.206.201:5200/api/sales-superadmin/kpis?branchId=${
+          let kpiUrl = `https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/kpis?branchId=${
             selectedBranch || 'all'
           }`;
           if (startDate) kpiUrl += `&startDate=${startDate}`;
@@ -277,11 +277,6 @@ export default function ReportsScreen() {
           )}
         </View>
 
-        {/* Heading */}
-        <Text style={styles.sectionHeading}>
-          Viewing: {branches.find((b) => b.branch_id.toString() === selectedBranch)?.branch_name || 'Branch'} {TIME_RANGE_OPTIONS.find(o => o.id === selectedTimeRange)?.label} Report
-        </Text>
-
         {/* Time Range Dropdown */}
         <View style={styles.timeRangeContainer}>
           <TouchableOpacity
@@ -328,6 +323,11 @@ export default function ReportsScreen() {
             </View>
           )}
         </View>
+
+        {/* Heading */}
+        <Text style={styles.sectionHeading}>
+          Viewing: {branches.find((b) => b.branch_id.toString() === selectedBranch)?.branch_name || 'Branch'} {TIME_RANGE_OPTIONS.find(o => o.id === selectedTimeRange)?.label} Report
+        </Text>
 
         {/* Chart */}
         <View style={styles.chartWrapper}>

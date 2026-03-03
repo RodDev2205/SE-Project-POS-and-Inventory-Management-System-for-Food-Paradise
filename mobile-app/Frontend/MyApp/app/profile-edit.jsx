@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { NotificationContext } from '@/context/NotificationContext';
 import {
   View,
   Text,
@@ -10,57 +11,63 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AppTextInput from '@/components/AppText';
-import PrimaryButton from '@/components/Button';
+// personal info is display-only, no text inputs needed
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 
 export default function ProfileEditScreen() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('Super Admin');
-  const [email, setEmail] = useState('superadmin@example.com');
-  const [phoneNumber, setPhoneNumber] = useState('+63 912 345 6789');
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
+  const { auth, setAuth } = useContext(NotificationContext);
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [roleName, setRoleName] = useState('');
+  const [createdAt, setCreatedAt] = useState('');
+  const [status, setStatus] = useState('');
 
   const handleGoBack = () => {
     router.back();
   };
 
-  const validate = () => {
-    const e = {};
-    if (!fullName.trim()) e.fullName = 'Full name is required';
-    if (!email.trim()) e.email = 'Email is required';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = 'Invalid email format';
-    if (!phoneNumber.trim()) e.phoneNumber = 'Phone number is required';
-    return e;
-  };
+  // load profile from context when screen mounts
+  useEffect(() => {
+    const load = async () => {
+      if (!auth?.token) {
+        return; // nothing to load yet
+      }
 
-  const handleSaveChanges = async () => {
-    const e = validate();
-    if (Object.keys(e).length > 0) {
-      setErrors(e);
-      return;
-    }
+      const url = `https://deployment-backend-repo-production.up.railway.app/api/users/user/me`;
+      try {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${auth.token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setFullName(data.full_name || '');
+          setUsername(data.username || '');
+          // use role_name from API directly (joined in controller)
+          setRoleName(data.role_name || '');
+          setCreatedAt(data.created_at || '');
+          setStatus(data.status || '');
+          // optionally update context if missing details
+          setAuth((prev) => ({ token: prev.token, user: { ...prev.user, ...data } }));
+        } else {
+          // fallback to whatever is in context
+          setFullName(auth.user.full_name || '');
+          setUsername(auth.user.username || '');
+          setRoleName(auth.user.role_name || '');
+          setCreatedAt(auth.user.created_at || '');
+          setStatus(auth.user.status || '');
+        }
+      } catch (err) {
+        console.error('Failed to load profile', err);
+        setFullName(auth.user.full_name || '');
+        setUsername(auth.user.username || '');
+        setRoleName(auth.user.role_name || '');
+        setCreatedAt(auth.user.created_at || '');
+        setStatus(auth.user.status || '');
+      }
+    };
+    load();
+  }, [auth, setAuth]);
 
-    setLoading(true);
-    try {
-      // TODO: Replace with your real API call to update profile
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      console.log('Profile update request:', {
-        fullName,
-        email,
-        phoneNumber,
-      });
-      
-      Alert.alert('Success', 'Profile updated successfully!');
-      handleGoBack();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update profile.';
-      Alert.alert('Error', message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // editing disabled: personal info is shown in text only
 
   return (
     <View style={[styles.root, { backgroundColor: '#fff' }]}>
@@ -71,7 +78,7 @@ export default function ProfileEditScreen() {
         <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Text style={styles.headerTitle}>User Profile</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -81,77 +88,20 @@ export default function ProfileEditScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Avatar Section */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color={Colors.primaryGreen} />
-          </View>
-          <TouchableOpacity style={styles.changeAvatarBtn}>
-            <Ionicons name="camera" size={16} color="#fff" />
-            <Text style={styles.changeAvatarText}>Change Photo</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Form Card */}
+          {/* Form Card */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
 
-          <AppTextInput
-            label="Full Name"
-            placeholder="Enter full name"
-            value={fullName}
-            onChangeText={(t) => {
-              setFullName(t);
-              setErrors(e => ({ ...e, fullName: undefined }));
-            }}
-            error={errors.fullName}
-            autoCapitalize="words"
-            returnKeyType="next"
-          />
-
-          <AppTextInput
-            label="Email Address"
-            placeholder="Enter email address"
-            value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              setErrors(e => ({ ...e, email: undefined }));
-            }}
-            error={errors.email}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            returnKeyType="next"
-          />
-
-          <AppTextInput
-            label="Phone Number"
-            placeholder="Enter phone number"
-            value={phoneNumber}
-            onChangeText={(t) => {
-              setPhoneNumber(t);
-              setErrors(e => ({ ...e, phoneNumber: undefined }));
-            }}
-            error={errors.phoneNumber}
-            keyboardType="phone-pad"
-            returnKeyType="done"
-          />
-
-          {/* Buttons */}
-          <View style={styles.buttonContainer}>
-            <PrimaryButton
-              title="Save Changes"
-              onPress={handleSaveChanges}
-              loading={loading}
-              style={styles.saveBtn}
-            />
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={handleGoBack}
-              disabled={loading}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Full Name</Text>
+            <Text style={styles.infoValue}>{fullName}</Text>
           </View>
+          <View style={styles.infoDivider} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Username</Text>
+            <Text style={styles.infoValue}>{username}</Text>
+          </View>
+
         </View>
 
         {/* Account Info Section */}
@@ -160,19 +110,19 @@ export default function ProfileEditScreen() {
           <View style={styles.infoBox}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Account Created</Text>
-              <Text style={styles.infoValue}>January 15, 2024</Text>
+              <Text style={styles.infoValue}>{createdAt ? new Date(createdAt).toLocaleDateString() : '-'}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Account Type</Text>
-              <Text style={styles.infoValue}>Super Admin</Text>
+              <Text style={styles.infoLabel}>Role</Text>
+              <Text style={styles.infoValue}>{roleName || 'Super Admin'}</Text>
             </View>
             <View style={styles.infoDivider} />
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Status</Text>
-              <View style={styles.statusBadge}>
-                <Ionicons name="checkmark-circle" size={14} color={Colors.primaryGreen} />
-                <Text style={styles.statusText}>Active</Text>
+              <View style={[styles.statusBadge, {backgroundColor: status === 'Activate' || status === 1 ? '#e0f2e0' : '#fde0e0'}]}>
+                <Ionicons name={status === 'Activate' || status === 1 ? "checkmark-circle" : "close-circle"} size={14} color={status === 'Activate' || status === 1 ? Colors.primaryGreen : '#d9534f'} />
+                <Text style={[styles.statusText, {color: status === 'Activate' || status === 1 ? Colors.primaryGreen : '#d9534f'}]}>{status === 'Activate' || status === 1 ? 'Activated' : 'Deactivated'}</Text>
               </View>
             </View>
           </View>

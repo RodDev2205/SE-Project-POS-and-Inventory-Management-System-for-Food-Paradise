@@ -37,7 +37,7 @@ export default function LoginScreen({
 
       if (!verificationCode) {
         // step 1: request a reset code be emailed
-        const resp = await fetch('http://10.181.206.201:5200/api/auth/recovery/start', {
+        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username })
@@ -59,7 +59,7 @@ export default function LoginScreen({
         return body;
       } else if (!newPassword) {
         // step 2: verify the code
-        const resp = await fetch('http://10.181.206.201:5200/api/auth/recovery/verify-pin', {
+        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/verify-pin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, pin: verificationCode })
@@ -80,7 +80,7 @@ export default function LoginScreen({
         return body;
       } else {
         // step 3: submit new password
-        const resp = await fetch('http://10.181.206.201:5200/api/auth/recovery/reset', {
+        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, token: resetToken, newPassword })
@@ -155,7 +155,7 @@ export default function LoginScreen({
     setLoading(true);
     try {
       // Call backend authentication API using machine IP instead of localhost
-      const response = await fetch('http://10.181.206.201:5200/api/auth/login', {
+      const response = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/login', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

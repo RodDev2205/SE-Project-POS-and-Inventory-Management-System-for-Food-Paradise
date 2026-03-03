@@ -79,7 +79,7 @@ export const NotificationProvider = ({ children }) => {
   // --------------------------------------------------
   React.useEffect(() => {
     if (!auth?.token) return;
-    const socket = ioclient('http://10.181.206.201:5200', {
+    const socket = ioclient('https://deployment-backend-repo-production.up.railway.app', {
       auth: { token: auth.token },
       transports: ['websocket'],
     });
@@ -89,14 +89,14 @@ export const NotificationProvider = ({ children }) => {
         let items = [];
         // fetch all inventory (supersadmin sees all, admin sees their branch only)
         if (auth.user?.role_id === 3) {
-          const res = await fetch('http://10.181.206.201:5200/api/inventory/all-inventory', {
+          const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory', {
             headers: { Authorization: `Bearer ${auth.token}` },
           });
           if (res.ok) {
             items = await res.json();
           }
         } else {
-          const res = await fetch('http://10.181.206.201:5200/api/inventory/get-ingredients', {
+          const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients', {
             headers: { Authorization: `Bearer ${auth.token}` },
           });
           if (res.ok) {

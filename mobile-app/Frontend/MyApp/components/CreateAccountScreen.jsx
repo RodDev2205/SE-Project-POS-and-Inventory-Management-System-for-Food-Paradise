@@ -21,7 +21,7 @@ export default function CreateAccountScreen({
     try {
       // Call backend signup API — mobile-created accounts are Super Admin (role_id=3)
       const { fullName, username, password, role_id } = accountData;
-      const resp = await fetch('http://10.181.206.201:5200/api/auth/signup', {
+      const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ full_name: fullName, username, password, role_id })

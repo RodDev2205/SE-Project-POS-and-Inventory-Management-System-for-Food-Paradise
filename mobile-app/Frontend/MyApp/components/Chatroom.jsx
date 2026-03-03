@@ -24,7 +24,7 @@ import { NotificationContext } from '@/context/NotificationContext';
 import { io } from 'socket.io-client';
 import { jwtDecode } from 'jwt-decode';
 
-const SOCKET_URL = 'http://10.181.206.201:5200';
+const SOCKET_URL = 'https://deployment-backend-repo-production.up.railway.app';
 
 export default function Chatroom({ branchName, branchId, onClose, isOnline = true, onNewMessage }) {
   const [message, setMessage] = useState('');
@@ -66,7 +66,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
 
         // Fetch messages from API
         const messageResponse = await fetch(
-          `http://10.181.206.201:5200/api/chat/branch/${branchId}`,
+          `https://deployment-backend-repo-production.up.railway.app/api/chat/branch/${branchId}`,
           {
             method: 'GET',
             headers: {
@@ -240,7 +240,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
 
       console.log('Uploading file:', fileName, 'Type:', messageType);
 
-      const uploadResponse = await fetch('http://10.181.206.201:5200/api/chat/upload', {
+      const uploadResponse = await fetch('https://deployment-backend-repo-production.up.railway.app/api/chat/upload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${auth.token}`,
@@ -307,10 +307,10 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
       
       console.log('Documents directory:', dirPath);
       console.log('Downloading file to:', downloadPath);
-      console.log('File URL:', `http://10.181.206.201:5200${fileUrl}`);
+      console.log('File URL:', `https://deployment-backend-repo-production.up.railway.app${fileUrl}`);
 
       const { uri } = await FileSystem.downloadAsync(
-        `http://10.181.206.201:5200${fileUrl}`,
+        `https://deployment-backend-repo-production.up.railway.app${fileUrl}`,
         downloadPath
       );
       
@@ -344,7 +344,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
   // show image preview and allow saving
   const handleImagePress = (relativeUrl, name) => {
     setModalImage({
-      url: `http://10.181.206.201:5200${relativeUrl}`,
+      url: `https://deployment-backend-repo-production.up.railway.app${relativeUrl}`,
       name: name || `image_${Date.now()}.jpg`,
     });
   };
@@ -438,10 +438,13 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
       {modalImage && (
         <Modal visible={true} transparent={true} animationType="fade">
           <View style={styles.modalContainer}>
-            <Image source={{ uri: modalImage.url }} style={styles.modalImage} />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={() => setModalImage(null)} style={styles.modalBtn}>
-                <Text style={styles.modalBtnText}>Close</Text>
+            <View style={styles.imageWrapper}>
+              <Image source={{ uri: modalImage.url }} style={styles.modalImage} />
+              <TouchableOpacity 
+                onPress={() => setModalImage(null)} 
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -504,7 +507,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
               {msg.messageType === 'image' && msg.attachmentUrl ? (
                 <TouchableOpacity onPress={() => handleImagePress(msg.attachmentUrl, msg.attachmentName)}>
                   <Image
-                    source={{ uri: `http://10.181.206.201:5200${msg.attachmentUrl}` }}
+                    source={{ uri: `https://deployment-backend-repo-production.up.railway.app${msg.attachmentUrl}` }}
                     style={styles.attachmentImage}
                   />
                 </TouchableOpacity>
@@ -738,11 +741,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  imageWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
   modalImage: {
     width: '90%',
     height: '70%',
     resizeMode: 'contain',
-    marginBottom: 20,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalButtons: {
     flexDirection: 'row',
