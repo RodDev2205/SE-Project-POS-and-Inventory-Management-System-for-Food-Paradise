@@ -21,7 +21,7 @@ export default function CashierManagement() {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const res = await fetch("http://localhost:5200/api/admin/cashiers", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -37,7 +37,7 @@ export default function CashierManagement() {
   const handleAddCashier = async (newCashier) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5200/api/admin/cashiers", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(newCashier),
@@ -57,7 +57,7 @@ export default function CashierManagement() {
   const handleToggleStatus = async (id) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5200/api/admin/toggle/${id}`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/toggle/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
@@ -78,7 +78,7 @@ export default function CashierManagement() {
   const handleSaveEdit = async (updatedCashier) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5200/api/admin/cashiers/${updatedCashier.id}`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers/${updatedCashier.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -109,7 +109,7 @@ export default function CashierManagement() {
   const handleUpdatePassword = async (cashierId, password) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5200/api/admin/cashiers/${cashierId}/password`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers/${cashierId}/password`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ password }),

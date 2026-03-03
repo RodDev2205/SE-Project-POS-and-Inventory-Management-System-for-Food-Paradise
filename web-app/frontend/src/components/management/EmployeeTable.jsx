@@ -29,7 +29,7 @@ export default function UserList({ type }) {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5200/api/superadmin/get${type}`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/superadmin/get${type}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -51,7 +51,7 @@ export default function UserList({ type }) {
   const fetchBranches = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5200/api/branches/getAll", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches/getAll", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch branches");
@@ -97,7 +97,7 @@ export default function UserList({ type }) {
 
     try {
       const res = await fetch(
-        `http://localhost:5200/api/superadmin/users/${userId}/status`,
+        `https://deployment-backend-repo-production.up.railway.app/api/superadmin/users/${userId}/status`,
         {
           method: "PATCH",
           headers: {

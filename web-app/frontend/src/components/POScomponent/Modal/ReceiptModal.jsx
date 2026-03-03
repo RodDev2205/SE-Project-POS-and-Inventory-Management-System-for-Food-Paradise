@@ -21,7 +21,7 @@ export default function ReceiptModal({
     };
 
     try {
-      const res = await fetch("http://localhost:5200/api/print-receipt", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/print-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

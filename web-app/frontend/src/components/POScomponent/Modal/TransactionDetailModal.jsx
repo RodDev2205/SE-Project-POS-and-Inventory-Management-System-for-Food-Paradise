@@ -146,7 +146,7 @@ export default function TransactionDetailModal({
                 setSubmittingVoid(true);
                 try {
                   const token = localStorage.getItem("token");
-                  const res = await fetch("http://localhost:5200/api/pos/void", {
+                  const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/void", {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",
@@ -338,7 +338,7 @@ export default function TransactionDetailModal({
                       .filter(it => it.refund_qty > 0);
                   }
 
-                  const res = await fetch("http://localhost:5200/api/pos/refund", {
+                  const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/refund", {
                     method: "POST",
                     headers: {
                       "Content-Type": "application/json",

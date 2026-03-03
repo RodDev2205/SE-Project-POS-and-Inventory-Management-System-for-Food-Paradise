@@ -22,7 +22,7 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
     const fetchBranches = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5200/api/branches/getAll", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches/getAll", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Failed to fetch branches");
@@ -78,7 +78,7 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
       if (password) payload.password = password;
 
       const userId = user.id || user.user_id;
-      const res = await fetch(`http://localhost:5200/api/users/user/${userId}`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/users/user/${userId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

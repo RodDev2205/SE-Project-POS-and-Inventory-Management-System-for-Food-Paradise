@@ -89,7 +89,7 @@ export default function ReportsScreen() {
           endDate = startDate;
           break;
         case 'week':
-          period = 'weekly';
+          period = 'daily';
           const day = now.getDay();
           const mon = new Date(now);
           mon.setDate(now.getDate() - ((day + 6) % 7));
@@ -132,8 +132,20 @@ export default function ReportsScreen() {
         const chartArr = arr.map((r) => {
           let label = r.period_key;
           if (period === 'hourly') {
-            const d = new Date(label);
-            label = `${d.getHours()}:00`;
+            // Extract hour from datetime string (e.g., "2026-03-02 14:00:00" → "14:00")
+            const timePart = label.split(' ')[1];
+            if (timePart) {
+              label = timePart.slice(0, 5); // HH:MM
+            } else {
+              const d = new Date(label);
+              label = `${String(d.getHours()).padStart(2, '0')}:00`;
+            }
+          } else if (period === 'daily') {
+            // Extract day label from date (M T W T F S S)
+            const dateStr = label.split(' ')[0] || label;
+            const d = new Date(dateStr);
+            const dayNames = ['S','M','T','W','T','F','S'];
+            label = dayNames[d.getDay()];
           } else if (period === 'weekly') {
             label = label.split('-')[1];
           } else if (period === 'monthly') {

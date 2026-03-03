@@ -137,7 +137,7 @@ const InventoryManagement = () => {
 
   // ================== LOAD INGREDIENTS ==================
   useEffect(() => {
-    fetch("http://localhost:5200/api/raw-items")
+    fetch("https://deployment-backend-repo-production.up.railway.app/api/raw-items")
       .then((res) => res.json())
       .then((data) => setInventory(data))
       .catch((err) => console.error("Inventory fetch error:", err));
@@ -146,7 +146,7 @@ const InventoryManagement = () => {
   // ================== LOAD PORTIONS ==================
   const loadPortions = async () => {
     try {
-      const res = await fetch("http://localhost:5200/api/portions");
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/portions");
       const data = await res.json();
       const formatted = data.map((p) => ({
         ...p,
@@ -165,7 +165,7 @@ const InventoryManagement = () => {
   // ================== ADD/UPDATE INGREDIENT ==================
   const handleAddItem = async (newItem) => {
     try {
-      const res = await fetch("http://localhost:5200/api/raw-items", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/raw-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newItem),
@@ -182,7 +182,7 @@ const InventoryManagement = () => {
   const handleSaveItem = async (updatedItem) => {
     try {
       const res = await fetch(
-        `http://localhost:5200/api/raw-items/${updatedItem.raw_item_id}`,
+        `https://deployment-backend-repo-production.up.railway.app/api/raw-items/${updatedItem.raw_item_id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -205,8 +205,8 @@ const InventoryManagement = () => {
     try {
       const method = editingPortion ? "PUT" : "POST";
       const url = editingPortion
-        ? `http://localhost:5200/api/portions/${editingPortion.portion_id}`
-        : "http://localhost:5200/api/portions";
+        ? `https://deployment-backend-repo-production.up.railway.app/api/portions/${editingPortion.portion_id}`
+        : "https://deployment-backend-repo-production.up.railway.app/api/portions";
 
       await fetch(url, {
         method,

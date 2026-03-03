@@ -13,7 +13,7 @@ export default function MenuItemCard({ item, onEdit, onDelete }) {
       {/* Product Image */}
       <div className="h-48 overflow-hidden">
         <img
-          src={item.image_path ? `http://localhost:5200${item.image_path}` : "https://via.placeholder.com/300x200?text=Food+Item"}
+          src={item.image_path ? `https://deployment-backend-repo-production.up.railway.app${item.image_path}` : "https://via.placeholder.com/300x200?text=Food+Item"}
           alt={item.product_name}
           className="w-full h-full object-cover"
         />  

@@ -23,7 +23,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
   useEffect(() => {
     setLoading(true);
     setError("");
-    fetch("http://localhost:5200/api/menu", {
+    fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
       .then((res) => {
@@ -72,7 +72,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
     }
 
     try {
-      const response = await fetch("http://localhost:5200/api/pos/complete-sale", {
+      const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/complete-sale", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

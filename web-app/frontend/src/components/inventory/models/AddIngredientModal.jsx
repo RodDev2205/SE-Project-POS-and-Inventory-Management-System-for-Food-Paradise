@@ -41,7 +41,7 @@ const AddIngredientModal = ({ isOpen, onClose, onAdd }) => {
       if (!token) throw new Error("You must be logged in");
 
       const response = await fetch(
-        "http://localhost:5200/api/inventory/add-ingredient",
+        "https://deployment-backend-repo-production.up.railway.app/api/inventory/add-ingredient",
         {
           method: "POST",
           headers: {

@@ -25,7 +25,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
   const [hasMore, setHasMore] = useState(true);
   const [loadingIngredients, setLoadingIngredients] = useState(false);
 
-  const API_INVENTORY = "http://localhost:5200/api/inventory";
+  const API_INVENTORY = "https://deployment-backend-repo-production.up.railway.app/api/inventory";
 
   const productNameRef = useRef(null);
 
@@ -42,7 +42,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
         ingredients: [],
         file: null,
       }));
-      setFilePreview(item.image_path ? `http://localhost:5200${item.image_path}` : null);
+      setFilePreview(item.image_path ? `https://deployment-backend-repo-production.up.railway.app${item.image_path}` : null);
       // fetch existing linked ingredients
       fetchLinkedIngredients(item.product_id);
     }
@@ -84,7 +84,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
   const fetchLinkedIngredients = async (productId) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5200/api/menu/${productId}/inventory`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/menu/${productId}/inventory`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -144,7 +144,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
       if (newItem.menu_status) form.append("menu_status", newItem.menu_status);
       form.append("ingredients", JSON.stringify(newItem.ingredients));
 
-      const endpoint = declined ? `http://localhost:5200/api/menu/declined/${item.product_id}` : `http://localhost:5200/api/menu/${item.product_id}`;
+      const endpoint = declined ? `https://deployment-backend-repo-production.up.railway.app/api/menu/declined/${item.product_id}` : `https://deployment-backend-repo-production.up.railway.app/api/menu/${item.product_id}`;
       const res = await fetch(endpoint, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },

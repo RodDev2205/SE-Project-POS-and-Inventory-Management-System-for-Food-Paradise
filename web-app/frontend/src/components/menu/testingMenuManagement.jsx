@@ -17,7 +17,7 @@ export default function MenuManagementUI() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("Menu List");
 
-  const API_BASE = "http://localhost:5200/api";
+  const API_BASE = "https://deployment-backend-repo-production.up.railway.app/api";
 
   const fetchDeclinedItems = async () => {
     try {
@@ -64,7 +64,7 @@ export default function MenuManagementUI() {
         // debug: log token presence (never log full token in production)
         console.debug("fetchProducts: token present", !!token);
 
-        const response = await fetch("http://localhost:5200/api/menu", {
+        const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
           headers: {
             "Authorization": `Bearer ${token}`,
           },
@@ -87,7 +87,7 @@ export default function MenuManagementUI() {
 
     const fetchCategories = async () => {
       try {
-        const response = await fetch("http://localhost:5200/api/categories");
+        const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/categories");
         if (!response.ok) throw new Error("Failed to fetch categories");
         const data = await response.json();
         setCategories(data);
@@ -114,7 +114,7 @@ export default function MenuManagementUI() {
     console.log("New Item:", item);
     // Refresh products after adding new item
     const token = localStorage.getItem("token");
-    fetch("http://localhost:5200/api/menu", {
+    fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
       headers: {
         "Authorization": `Bearer ${token}`,
       },
@@ -133,7 +133,7 @@ export default function MenuManagementUI() {
   const handleDelete = (productId) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
       const token = localStorage.getItem("token");
-      fetch(`http://localhost:5200/api/menu/${productId}`, {
+      fetch(`https://deployment-backend-repo-production.up.railway.app/api/menu/${productId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -220,7 +220,7 @@ export default function MenuManagementUI() {
               <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
                 {item.image_path && (
                   <img 
-                    src={`http://localhost:5200${item.image_path}`} 
+                    src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`} 
                     alt={item.product_name}
                     className="w-full h-48 object-cover rounded-lg mb-3"
                   />
@@ -263,7 +263,7 @@ export default function MenuManagementUI() {
               <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
                 {item.image_path && (
                   <img 
-                    src={`http://localhost:5200${item.image_path}`} 
+                    src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`} 
                     alt={item.product_name}
                     className="w-full h-48 object-cover rounded-lg mb-3"
                   />

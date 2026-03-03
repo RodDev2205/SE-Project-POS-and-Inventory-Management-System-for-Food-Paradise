@@ -13,9 +13,9 @@ export default function MenuManagement() {
   const [activeTab, setActiveTab] = useState("Menu List");
   const token = localStorage.getItem("token");
 
-  const API_MENU = "http://localhost:5200/api/menu";
-  const API_CATEGORIES = "http://localhost:5200/api/categories";
-  const API_DECLINED = "http://localhost:5200/api/menu/declined";
+  const API_MENU = "https://deployment-backend-repo-production.up.railway.app/api/menu";
+  const API_CATEGORIES = "https://deployment-backend-repo-production.up.railway.app/api/categories";
+  const API_DECLINED = "https://deployment-backend-repo-production.up.railway.app/api/menu/declined";
 
   // ------------------- FETCH ON MOUNT -------------------
   useEffect(() => {

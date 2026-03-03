@@ -18,7 +18,7 @@ export default function LogsPage() {
     const fetchLogs = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5200/api/activity-logs", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/activity-logs", {
           headers: { Authorization: `Bearer ${token}` },
         });
 

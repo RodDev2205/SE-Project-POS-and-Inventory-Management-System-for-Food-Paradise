@@ -15,7 +15,7 @@ export default function Records () {
 
     useEffect(() => {
         const token = localStorage.getItem("token");
-        fetch("http://localhost:5200/api/pos/user-transactions", {
+        fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/user-transactions", {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then(res => res.json())
@@ -42,7 +42,7 @@ export default function Records () {
         setDetailLoading(true);
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`http://localhost:5200/api/pos/transaction/${transaction.transaction_id}`, {
+            const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/pos/transaction/${transaction.transaction_id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();

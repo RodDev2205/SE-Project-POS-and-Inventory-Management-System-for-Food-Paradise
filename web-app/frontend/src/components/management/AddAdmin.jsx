@@ -23,7 +23,7 @@ export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
       try {
         const token = localStorage.getItem("token");
 
-        const res = await fetch("http://localhost:5200/api/branches/getAll", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches/getAll", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -56,7 +56,7 @@ export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch("http://localhost:5200/api/superadmin/createAdmin", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/superadmin/createAdmin", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

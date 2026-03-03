@@ -37,7 +37,7 @@ export default function ChatRoom() {
     }
 
     // Connect socket
-    socketRef.current = io("http://localhost:5200", {
+    socketRef.current = io("https://deployment-backend-repo-production.up.railway.app", {
       auth: { token },
       reconnectionDelay: 1000,
       reconnection: true,
@@ -79,7 +79,7 @@ export default function ChatRoom() {
       if (!token) return;
       try {
         setIsLoading(true);
-        const res = await fetch("http://localhost:5200/api/chat/branches-with-messages", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/chat/branches-with-messages", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -110,7 +110,7 @@ export default function ChatRoom() {
     const fetchMessages = async () => {
       try {
         const res = await fetch(
-          `http://localhost:5200/api/chat/branch/${activeBranchId}`,
+          `https://deployment-backend-repo-production.up.railway.app/api/chat/branch/${activeBranchId}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -149,7 +149,7 @@ export default function ChatRoom() {
         const token = localStorage.getItem("token");
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch("http://localhost:5200/api/chat/upload", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/chat/upload", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: form,
@@ -254,15 +254,15 @@ export default function ChatRoom() {
                       {msg.message && <p className="text-sm break-words">{msg.message}</p>}
                       {msg.attachment_url && msg.message_type === 'image' && (
                         <img
-                          src={`http://localhost:5200${msg.attachment_url}`}
+                          src={`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`}
                           alt="attachment"
                           className="mt-2 max-w-xs rounded cursor-pointer"
-                          onClick={() => window.open(`http://localhost:5200${msg.attachment_url}`, '_blank')}
+                          onClick={() => window.open(`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`, '_blank')}
                         />
                       )}
                       {msg.attachment_url && msg.message_type === 'file' && (
                         <a
-                          href={`http://localhost:5200${msg.attachment_url}`}
+                          href={`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`}
                           className="mt-2 inline-block text-blue-600 underline"
                           download
                         >

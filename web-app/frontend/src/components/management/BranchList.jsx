@@ -19,7 +19,7 @@ export default function BranchList() {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        "http://localhost:5200/api/branches/getBranches",
+        "https://deployment-backend-repo-production.up.railway.app/api/branches/getBranches",
         {
           headers: { Authorization: `Bearer ${token}` },
         }

@@ -28,7 +28,7 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
         const token = localStorage.getItem("token");
 
         const res = await fetch(
-          `http://localhost:5200/api/superadmin/${branch.branch_id}/staff`,
+          `https://deployment-backend-repo-production.up.railway.app/api/superadmin/${branch.branch_id}/staff`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -61,7 +61,7 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
         const token = localStorage.getItem("token");
 
         const res = await fetch(
-          `http://localhost:5200/api/menu-superadmin/branches/${branch.branch_id}/approved-menu`,
+          `https://deployment-backend-repo-production.up.railway.app/api/menu-superadmin/branches/${branch.branch_id}/approved-menu`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -207,7 +207,7 @@ export default function ViewBranchModal({ isOpen, onClose, branch }) {
                         <div className="h-24 bg-gray-100 rounded mb-3 flex items-center justify-center">
                           {item.image_path ? (
                             <img
-                              src={`http://localhost:5200${item.image_path}`}
+                              src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`}
                               alt={item.product_name}
                               className="h-full object-cover rounded"
                             />

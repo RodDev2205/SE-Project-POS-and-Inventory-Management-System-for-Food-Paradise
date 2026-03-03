@@ -19,7 +19,7 @@ const InventoryManagement = () => {
       console.log("TOKEN:", token);
 
       const response = await fetch(
-        "http://localhost:5200/api/inventory/get-ingredients",
+        "https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients",
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -32,7 +32,7 @@ export default function EditItemModal({
     // Fetch categories
     const fetchCategories = async () => {
       try {
-        const res = await fetch("http://localhost:5200/api/categories", {
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/categories", {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Failed to fetch categories");
@@ -82,7 +82,7 @@ export default function EditItemModal({
 
       if (file) formData.append("image", file);
 
-      const res = await fetch(`http://localhost:5200/api/menu/${item.product_id}`, {
+      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/menu/${item.product_id}`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

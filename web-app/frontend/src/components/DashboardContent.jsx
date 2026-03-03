@@ -51,7 +51,7 @@ const DashboardContent = () => {
     const token = localStorage.getItem("token");
 
     // fetch total inventory count
-    fetch("http://localhost:5200/api/inventory/count", {
+    fetch("https://deployment-backend-repo-production.up.railway.app/api/inventory/count", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -65,7 +65,7 @@ const DashboardContent = () => {
       });
 
     // fetch low stock count
-    fetch("http://localhost:5200/api/inventory/low-stock-count", {
+    fetch("https://deployment-backend-repo-production.up.railway.app/api/inventory/low-stock-count", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())

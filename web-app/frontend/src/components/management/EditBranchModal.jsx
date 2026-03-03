@@ -27,7 +27,7 @@ export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
       const token = localStorage.getItem("token");
 
       const res = await fetch(
-        `http://localhost:5200/api/branches/${branch._id || branch.id}`,
+        `https://deployment-backend-repo-production.up.railway.app/api/branches/${branch._id || branch.id}`,
         {
           method: "PUT", // or PATCH if your backend prefers
           headers: {

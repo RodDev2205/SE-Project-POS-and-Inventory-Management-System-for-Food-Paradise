@@ -7,7 +7,7 @@ useEffect(() => {
 
 const fetchCategories = async () => {
   try {
-    const res = await fetch("http://localhost:5200/api/categories");
+    const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/categories");
     if (!res.ok) throw new Error("Failed to fetch categories");
     const data = await res.json();
     setCategories(data);

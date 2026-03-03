@@ -13,8 +13,8 @@ export default function MenuListTab() {
   const [loadingIngredients, setLoadingIngredients] = useState(false);
 
   const ITEMS_PER_PAGE = 8;
-  const API_URL = "http://localhost:5200/api/menu-superadmin/products";
-  const API_MENU_INVENTORY = "http://localhost:5200/api/menu-superadmin/menu-inventory";
+  const API_URL = "https://deployment-backend-repo-production.up.railway.app/api/menu-superadmin/products";
+  const API_MENU_INVENTORY = "https://deployment-backend-repo-production.up.railway.app/api/menu-superadmin/menu-inventory";
 
   // 🔹 Fetch from backend
   useEffect(() => {
@@ -220,7 +220,7 @@ export default function MenuListTab() {
             <div className="h-24 bg-gray-100 rounded mb-4 flex items-center justify-center">
               {item.image_path ? (
                 <img
-                  src={`http://localhost:5200${item.image_path}`}
+                  src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`}
                   alt={item.product_name}
                   className="h-full object-cover rounded"
                 />
@@ -275,7 +275,7 @@ export default function MenuListTab() {
               <div className="bg-gray-50 rounded-xl flex items-center justify-center h-64 overflow-hidden">
                 {selectedProduct.image_path ? (
                   <img
-                    src={`http://localhost:5200${selectedProduct.image_path}`}
+                    src={`https://deployment-backend-repo-production.up.railway.app${selectedProduct.image_path}`}
                     alt={selectedProduct.product_name}
                     className="object-cover h-full w-full"
                   />

@@ -15,7 +15,7 @@ export default function AddBranchModal({ isOpen, onClose, onSubmit }) {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5200/api/branches", {
+      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

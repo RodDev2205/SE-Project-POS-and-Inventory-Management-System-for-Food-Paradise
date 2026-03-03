@@ -14,7 +14,7 @@ export default function EditItemModal({ item, onClose, onUpdated }) {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch("http://localhost:5200/api/categories");
+        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/categories");
         const data = await res.json();
         setCategories(data);
       } catch (err) {
@@ -71,7 +71,7 @@ export default function EditItemModal({ item, onClose, onUpdated }) {
       if (file) formData.append("image", file);
 
       const res = await fetch(
-        `http://localhost:5200/api/menu/declined/${item.product_id}`,
+        `https://deployment-backend-repo-production.up.railway.app/api/menu/declined/${item.product_id}`,
         {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },

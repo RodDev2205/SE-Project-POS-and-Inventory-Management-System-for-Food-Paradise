@@ -18,7 +18,7 @@ export default function InventoryTab() {
       // Try to get all inventory first (superadmin)
       try {
         const allResponse = await fetch(
-          "http://localhost:5200/api/inventory/all-inventory",
+          "https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -38,7 +38,7 @@ export default function InventoryTab() {
 
       // Fall back to branch-specific inventory
       const response = await fetch(
-        "http://localhost:5200/api/inventory/get-ingredients",
+        "https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients",
         {
           headers: {
             Authorization: `Bearer ${token}`,

@@ -54,7 +54,7 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
       if (!token) throw new Error("You must be logged in");
 
       const response = await fetch(
-        `http://localhost:5200/api/inventory/edit-ingredient/${ingredient.inventory_id}`,
+        `https://deployment-backend-repo-production.up.railway.app/api/inventory/edit-ingredient/${ingredient.inventory_id}`,
         {
           method: "PUT",
           headers: {
