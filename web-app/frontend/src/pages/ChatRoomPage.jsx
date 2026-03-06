@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { Send, LogOut, Users, Link } from "lucide-react";
 import { jwtDecode } from "jwt-decode";
+import API_BASE_URL from '../config/api';
 
 export default function ChatRoom() {
   const [branches, setBranches] = useState([]);
@@ -37,7 +38,7 @@ export default function ChatRoom() {
     }
 
     // Connect socket
-    socketRef.current = io("https://deployment-backend-repo-production.up.railway.app", {
+    socketRef.current = io(API_BASE_URL, {
       auth: { token },
       reconnectionDelay: 1000,
       reconnection: true,
@@ -79,7 +80,7 @@ export default function ChatRoom() {
       if (!token) return;
       try {
         setIsLoading(true);
-        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/chat/branches-with-messages", {
+        const res = await fetch(`${API_BASE_URL}/api/chat/branches-with-messages`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -110,7 +111,7 @@ export default function ChatRoom() {
     const fetchMessages = async () => {
       try {
         const res = await fetch(
-          `https://deployment-backend-repo-production.up.railway.app/api/chat/branch/${activeBranchId}`,
+          `${API_BASE_URL}/api/chat/branch/${activeBranchId}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -149,7 +150,7 @@ export default function ChatRoom() {
         const token = localStorage.getItem("token");
         const form = new FormData();
         form.append("file", file);
-        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/chat/upload", {
+        const res = await fetch(`${API_BASE_URL}/api/chat/upload`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: form,
@@ -254,15 +255,15 @@ export default function ChatRoom() {
                       {msg.message && <p className="text-sm break-words">{msg.message}</p>}
                       {msg.attachment_url && msg.message_type === 'image' && (
                         <img
-                          src={`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`}
+                          src={`${API_BASE_URL}${msg.attachment_url}`}
                           alt="attachment"
                           className="mt-2 max-w-xs rounded cursor-pointer"
-                          onClick={() => window.open(`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`, '_blank')}
+                          onClick={() => window.open(`${API_BASE_URL}${msg.attachment_url}`, '_blank')}
                         />
                       )}
                       {msg.attachment_url && msg.message_type === 'file' && (
                         <a
-                          href={`https://deployment-backend-repo-production.up.railway.app${msg.attachment_url}`}
+                          href={`${API_BASE_URL}${msg.attachment_url}`}
                           className="mt-2 inline-block text-blue-600 underline"
                           download
                         >

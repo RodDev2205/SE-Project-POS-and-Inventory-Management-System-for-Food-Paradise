@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useAlert } from "@/context/AlertContext";
+import { Printer, Eye } from 'lucide-react';
 import Modal from "./Modal/Modal";
 import TransactionDetailModal from "../POScomponent/Modal/TransactionDetailModal";
+import API_BASE_URL from '../../config/api';
 
 export default function Records () {
     const [records, setRecords] = useState([]);
@@ -12,10 +15,11 @@ export default function Records () {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalData, setModalData] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const { error } = useAlert();
 
     useEffect(() => {
         const token = localStorage.getItem("token");
-        fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/user-transactions", {
+        fetch(`${API_BASE_URL}/api/pos/user-transactions`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then(res => res.json())
@@ -42,7 +46,7 @@ export default function Records () {
         setDetailLoading(true);
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/pos/transaction/${transaction.transaction_id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/pos/transaction/${transaction.transaction_id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -50,11 +54,38 @@ export default function Records () {
                 setModalData(data);
                 setIsModalOpen(true);
             } else {
-                alert(data.message || "Failed to load transaction details");
+                error("Load Error", data.message || "Failed to load transaction details");
             }
         } catch (err) {
             console.error("Detail fetch error", err);
-            alert("Failed to load transaction details");
+            error("Load Error", "Failed to load transaction details");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    const handlePrint = async (transaction) => {
+        setDetailLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            // fetch transaction details first then send to print endpoint
+            const res = await fetch(`${API_BASE_URL}/api/pos/transaction/${transaction.transaction_id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.message || "Failed to load transaction");
+            }
+            // send payload to print
+            await fetch(`${API_BASE_URL}/api/print-receipt`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(data),
+            });
+            success("Printing", "Receipt sent to printer");
+        } catch (err) {
+            console.error("Print error", err);
+            error("Print Error", err.message);
         } finally {
             setDetailLoading(false);
         }
@@ -89,7 +120,7 @@ export default function Records () {
             <div className="overflow-x-auto">
                 <table className="w-full table-auto">
                     <thead>
-                        <tr className="bg-gray-100 text-left text-sm text-gray-600 uppercase">
+                        <tr className="bg-gray-200 text-left text-sm text-gray-600 uppercase sticky top-0">
                             <th className="px-4 py-3">Time</th>
                             <th className="px-4 py-3">Transaction #</th>
                             <th className="px-4 py-3">Total</th>
@@ -108,13 +139,25 @@ export default function Records () {
                                 <td className="px-4 py-3 font-medium text-gray-800">{record.transaction_number}</td>
                                 <td className="px-4 py-3">₱ {Number(record.total_amount).toFixed(2)}</td>
                                 <td className="px-4 py-3">₱ {Number(record.amount_paid).toFixed(2)}</td>
-                                <td className="px-4 py-3 capitalize">{record.status}</td>
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 capitalize">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${record.status === 'completed' ? 'bg-green-100 text-green-800' : record.status === 'voided' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                        {record.status}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 flex gap-2">
                                     <button
                                         onClick={() => handleView(record)}
-                                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs"
+                                        className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                                        title="View"
                                     >
-                                        View
+                                        <Eye className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => handlePrint(record)}
+                                        className="p-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition"
+                                        title="Print Receipt"
+                                    >
+                                        <Printer className="w-4 h-4" />
                                     </button>
                                 </td>
                             </tr>

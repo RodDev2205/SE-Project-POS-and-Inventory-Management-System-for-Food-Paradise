@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../config/api';
 import { UserCircle, Users, Lock, Unlock, Eye, Pencil } from "lucide-react";
 
 import AddAdminModal from "./AddAdmin";
@@ -12,6 +14,7 @@ export default function UserList({ type }) {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { error: alertError } = useAlert();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -29,7 +32,7 @@ export default function UserList({ type }) {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/superadmin/get${type}`, {
+      const res = await fetch(`${API_BASE_URL}/api/superadmin/get${type}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -51,7 +54,7 @@ export default function UserList({ type }) {
   const fetchBranches = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches/getAll", {
+      const res = await fetch(`${API_BASE_URL}/api/branches/getAll`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch branches");
@@ -96,17 +99,15 @@ export default function UserList({ type }) {
     const newStatus = currentStatus === "Activate" ? "Deactivate" : "Activate";
 
     try {
-      const res = await fetch(
-        `https://deployment-backend-repo-production.up.railway.app/api/superadmin/users/${userId}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status: newStatus }),
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/superadmin/users/${userId}/status`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ status: newStatus }),
+          }
+        );
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to update status");
@@ -120,7 +121,7 @@ export default function UserList({ type }) {
         )
       );
     } catch (err) {
-      alert(err.message);
+      alertError("Error", err.message);
     }
   };
 
@@ -272,7 +273,7 @@ export default function UserList({ type }) {
 
                 return (
                   <tr key={userId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">{user.name}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-800">{user.first_name} {user.last_name}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{user.branch || "—"}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{user.username}</td>
                     <td className="px-6 py-4">

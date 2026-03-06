@@ -11,7 +11,7 @@ import {
 
 import Sidebar from "../components/Sidebar";
 import Records from "../components/POScomponent/Records";
-import Settings from "../components/POScomponent/Settings";
+import Settings from "./SettingsPage";
 import ParadisePOS from "../components/POSadminContent";
 
 export default function POSLayout({ switchToAdmin }) {

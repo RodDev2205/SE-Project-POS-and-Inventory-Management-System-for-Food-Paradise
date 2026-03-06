@@ -52,6 +52,7 @@ export default function DashboardScreen() {
     toggleNotificationRead,
     unreadCount,
     auth,
+    logout,
   } = useContext(NotificationContext);
 
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
@@ -71,6 +72,38 @@ export default function DashboardScreen() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [branchesWeeklySales, setBranchesWeeklySales] = useState([]);
   const [branchesWeeklySalesLoading, setBranchesWeeklySalesLoading] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [chartsVisible, setChartsVisible] = useState(false);
+
+  // ================================
+  // LIVE DATE/TIME UPDATER
+  // ================================
+  useEffect(() => {
+    const tick = () => {
+      setCurrentDateTime(new Date());
+    };
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatPhilippineDate = (d) => {
+    // use locale string with Manila timezone
+    try {
+      return d.toLocaleString('en-PH', {
+        timeZone: 'Asia/Manila',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+    } catch (e) {
+      return d.toString();
+    }
+  };
 
   // ================================
   // FETCH DASHBOARD STATS
@@ -169,30 +202,36 @@ export default function DashboardScreen() {
           const arr = await resp.json();
 
           // normalize possible period_key formats and map response by date key for easy lookup
+          // we must convert incoming timestamps to Philippine local date (Asia/Manila)
           const normalizeKey = (k) => {
             if (!k) return '';
-            // if already YYYY-MM-DD or contains T or space, take first 10 chars
-            if (typeof k === 'string' && (k.includes('T') || k.includes(' ') || k.length >= 10)) {
-              return k.slice(0, 10);
-            }
             try {
               const d = new Date(k);
-              if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-            } catch (e) {}
-            return String(k).slice(0, 10);
+              if (Number.isNaN(d.getTime())) throw new Error('invalid');
+              // use locale with en-CA (YYYY-MM-DD) while forcing Manila timezone
+              const manila = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+              return manila; // already YYYY-MM-DD
+            } catch (e) {
+              // fallback: take first 10 chars of string
+              const s = String(k);
+              return s.slice(0, 10);
+            }
           };
 
           const map = new Map((arr || []).map((r) => [normalizeKey(r.period_key), Number(r.total_sales) || 0]));
 
           console.log('branch', b.branch_id, 'sales-trend raw length', (arr || []).length, 'mapped keys', Array.from(map.keys()).slice(0,7));
+          // debugging timezone conversion
+          console.log('normalized dates sample', Array.from(map.keys()).slice(0,5));
 
-          // build 7-day array from Monday -> Sunday
+          // build 7-day array from Monday -> Sunday (keys based on Manila local date)
           const days = [];
           const dayNames = ['S','M','T','W','T','F','S'];
           for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate() + 1)) {
-            const key = d.toISOString().slice(0,10);
-            const val = map.get(key) || 0;
-            const label = dayNames[d.getDay()];
+            // convert this date to Manila YYYY-MM-DD for lookup
+            const manilaKey = new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+            const val = map.get(manilaKey) || 0;
+            const label = dayNames[new Date(d).getDay()];
             days.push({ day: label, value: val });
           }
 
@@ -248,6 +287,8 @@ export default function DashboardScreen() {
     socketRef.current.on('dashboardUpdate', () => {
       console.log('📡 Dashboard update received');
       fetchDashboardStats();
+      // also refresh the weekly sales chart so it reflects latest transactions
+      fetchBranchesWeeklySales();
     });
 
     socketRef.current.on('disconnect', (reason) => {
@@ -293,6 +334,9 @@ export default function DashboardScreen() {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
+
+      // Use logout from context to clear auth from storage
+      await logout();
 
       setShowLogoutModal(false);
       router.replace('/Login'); // better than push
@@ -396,7 +440,7 @@ export default function DashboardScreen() {
 
         {/* Greeting */}
         <Text style={styles.greeting}>Good Day,</Text>
-        <Text style={styles.date}>Friday, October 31, 2025</Text>
+        <Text style={styles.date}>{formatPhilippineDate(currentDateTime)}</Text>
 
         {/* ── Stat cards 2x2 ─────────────────────────────────── */}
         <View style={styles.cardsGrid}>
@@ -451,27 +495,41 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── Weekly Sales Overview ───────────────────────────── */}
-        <Text style={styles.sectionTitle}>Weekly Sales Overview</Text>
-
-        {branchesWeeklySalesLoading ? (
-          <ActivityIndicator size="small" color={Colors.primaryGreen} />
-        ) : (
-          branchesWeeklySales.map((b) => (
-            <React.Fragment key={b.branch_id}>
-              <Text style={styles.branchTitle}>{b.branch_name}</Text>
-              <BarChart data={b.data && b.data.length ? b.data : [{ day: '-', value: 0 }]} />
-            </React.Fragment>
-          ))
-        )}
-
-        {/* View details link */}
-        <TouchableOpacity 
-          style={styles.viewDetails}
-          onPress={handleViewBranchPerformance}
+        <TouchableOpacity
+          onPress={() => setChartsVisible(!chartsVisible)}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
         >
-          <Text style={styles.viewDetailsText}>View branch performances details </Text>
-          <Ionicons name="arrow-forward" size={14} color={Colors.primaryGreen} />
+          <Text style={styles.sectionTitle}>Weekly Sales Overview</Text>
+          <Ionicons
+            name={chartsVisible ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={Colors.primaryGreen}
+          />
         </TouchableOpacity>
+
+        {chartsVisible && (
+          <>
+            {branchesWeeklySalesLoading ? (
+              <ActivityIndicator size="small" color={Colors.primaryGreen} />
+            ) : (
+              branchesWeeklySales.map((b) => (
+                <React.Fragment key={b.branch_id}>
+                  <Text style={styles.branchTitle}>{b.branch_name}</Text>
+                  <BarChart data={b.data && b.data.length ? b.data : [{ day: '-', value: 0 }]} />
+                </React.Fragment>
+              ))
+            )}
+
+            {/* View details link */}
+            <TouchableOpacity 
+              style={styles.viewDetails}
+              onPress={handleViewBranchPerformance}
+            >
+              <Text style={styles.viewDetailsText}>View branch performances details </Text>
+              <Ionicons name="arrow-forward" size={14} color={Colors.primaryGreen} />
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Notifications Dropdown */}

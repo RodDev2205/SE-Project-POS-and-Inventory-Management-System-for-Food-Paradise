@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   View,
@@ -8,6 +9,8 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
@@ -85,8 +88,12 @@ export default function EmployeesScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primaryGreen} />
+    <SafeAreaView style={styles.root}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={Colors.primaryGreen}
+        translucent={Platform.OS === 'android'}
+      />
 
       {/* ── Header ─────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -214,7 +221,11 @@ export default function EmployeesScreen() {
                     <View
                       style={[styles.avatar, { backgroundColor: Colors.primaryGreen }]}
                     />
-                    <Text style={styles.employeeName}>{u.name}</Text>
+                    <Text style={styles.employeeName}>
+                      {u.first_name && u.last_name
+                        ? `${u.first_name} ${u.last_name}`
+                        : u.name}
+                    </Text>
                   </View>
                   <Text style={styles.employeeRole}>{u.role_name}</Text>
                 </View>
@@ -227,7 +238,11 @@ export default function EmployeesScreen() {
                 <View key={u.user_id} style={styles.employeeRow}>
                   <View style={styles.employeeInfo}>
                     <View style={[styles.avatar, { backgroundColor: '#ccc' }]} />
-                    <Text style={styles.employeeName}>{u.name}</Text>
+                    <Text style={styles.employeeName}>
+                      {u.first_name && u.last_name
+                        ? `${u.first_name} ${u.last_name}`
+                        : u.name}
+                    </Text>
                   </View>
                   <Text style={styles.employeeRole}>{u.role_name}</Text>
                 </View>
@@ -281,7 +296,7 @@ export default function EmployeesScreen() {
           )}
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -297,8 +312,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 1,
     paddingRight: 16,
-    paddingTop: 12,
-    paddingBottom: 2,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+    paddingBottom: 7,
     minHeight: 72,
   },
   logoWrap: {

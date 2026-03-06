@@ -1,5 +1,6 @@
 import React from "react";
 import { Search, ChevronDown } from "lucide-react";
+import API_BASE_URL from '../../../config/api';
 
 export default function ItemsPanel({
   items,
@@ -113,7 +114,7 @@ export default function ItemsPanel({
                 <div className="bg-gray-100 h-24 rounded mb-2 flex items-center justify-center text-gray-400 text-xs overflow-hidden">
                   {item.image_path ? (
                     <img
-                      src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`}
+                      src={`${API_BASE_URL}${item.image_path}`}
                       alt={item.product_name}
                       className="h-full w-full object-cover"
                     />

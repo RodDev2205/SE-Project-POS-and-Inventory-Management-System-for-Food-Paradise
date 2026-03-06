@@ -36,10 +36,21 @@ export default function ViewUserModal({ isOpen, onClose, user, onEdit }) {
   const displayValue = (value) =>
     value === null || value === undefined || value === "" ? "N/A" : value;
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const statusColors = {
-    Active: "bg-green-100 text-green-700",
-    Inactive: "bg-red-100 text-red-700",
-    Suspended: "bg-orange-100 text-orange-700",
+    Activate: "bg-green-100 text-green-700",
+    Deactivate: "bg-red-100 text-red-700",
   };
 
   const roleColors = {
@@ -69,10 +80,11 @@ export default function ViewUserModal({ isOpen, onClose, user, onEdit }) {
         <div className="mt-4">
           <span
             className={`px-3 py-1 rounded-full text-sm font-medium ${
-              roleColors[userData.role_id] || "bg-gray-100 text-gray-700"
+              // try role string first, fallback to role_name field if available
+              roleColors[userData.role] || roleColors[userData.role_name] || "bg-gray-100 text-gray-700"
             }`}
           >
-            {displayValue(userData.role)}
+            {displayValue(userData.role || userData.role_name)}
           </span>
         </div>
 
@@ -81,16 +93,13 @@ export default function ViewUserModal({ isOpen, onClose, user, onEdit }) {
           <h3 className="text-gray-600 font-semibold mb-3">Basic Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
             <span className="text-gray-500">Full Name:</span>
-            <span className="font-medium">{displayValue(userData.name)}</span>
+            <span className="font-medium">{displayValue(userData.first_name)} {displayValue(userData.last_name)}</span>
 
             <span className="text-gray-500">Username:</span>
             <span className="font-medium">{displayValue(userData.username)}</span>
 
-            <span className="text-gray-500">Email:</span>
-            <span className="font-medium">{displayValue(userData.email)}</span>
-
-            <span className="text-gray-500">Contact:</span>
-            <span className="font-medium">{displayValue(userData.contact)}</span>
+            <span className="text-gray-500">Contact Number:</span>
+            <span className="font-medium">{displayValue(userData.contact_number)}</span>
           </div>
         </div>
 
@@ -121,31 +130,15 @@ export default function ViewUserModal({ isOpen, onClose, user, onEdit }) {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm">
             <span className="text-gray-500">Created At:</span>
-            <span className="font-medium">{displayValue(userData.createdAt)}</span>
-
-            <span className="text-gray-500">Last Login:</span>
-            <span className="font-medium">{displayValue(userData.lastLogin)}</span>
+            <span className="font-medium">{formatDate(userData.created_at)}</span>
 
             <span className="text-gray-500">Created By:</span>
-            <span className="font-medium">{displayValue(userData.createdBy)}</span>
+            <span className="font-medium">{displayValue(userData.created_by)}</span>
           </div>
         </div>
 
         {/* Footer */}
         <div className="mt-10 flex flex-col sm:flex-row justify-end gap-3 border-t pt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-100"
-          >
-            Close
-          </button>
-
-          <button
-            onClick={() => onEdit?.(userData)}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-          >
-            Edit User
-          </button>
         </div>
       </div>
     </div>

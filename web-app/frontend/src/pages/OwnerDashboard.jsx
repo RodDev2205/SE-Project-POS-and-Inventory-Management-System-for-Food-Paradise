@@ -1,24 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
-import { 
-  LayoutDashboard, 
-  Split, 
-  BookOpen, 
+import {
+  LayoutDashboard,
+  Split,
+  BookOpen,
   SquareMenu,
   History,
-  MessageCircleMore, 
-  Settings 
+  MessageCircleMore,
+  Settings,
 } from "lucide-react";
-
-// Import your page components
-import DashboardPage from "./OwnerDashboardPage";
-import ManagementPage from "./ManagementPage";
-import ReportPage from "./ReportPage";
-import LogsPage from "./LogsPage";
-import SettingsPage from "./SettingsPage";
-import MenuListPage from "./MenuListPage";
-import ChatRoomPage from "./ChatRoomPage";  // Example additional page
 
 export default function OwnerDashboard() {
   // --- Dashboard Data (can be passed to components as props) ---
@@ -40,19 +32,37 @@ export default function OwnerDashboard() {
     ],
   };
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // --- Sidebar active state ---
   const [activeItem, setActiveItem] = useState("Dashboard");
 
-  // --- Sidebar navigation items ---
+  // --- Sidebar navigation items with paths ---
   const navItems = [
-    { name: "Dashboard", icon: LayoutDashboard },
-    { name: "Menu & Inventory", icon: SquareMenu },
-    { name: "Management", icon: Split },
-    { name: "Chat Room", icon: MessageCircleMore },
-    { name: "Reports", icon: BookOpen },
-    { name: "Logs", icon: History },
-    { name: "Settings", icon: Settings },
+    { name: "Dashboard", icon: LayoutDashboard, path: "/superadmin/dashboard" },
+    { name: "Chat Room", icon: MessageCircleMore, path: "/superadmin/chat-room" },
+    { name: "Menu & Inventory", icon: SquareMenu, path: "/superadmin/menu-inventory" },
+    { name: "Management", icon: Split, path: "/superadmin/management" },
+    { name: "Reports", icon: BookOpen, path: "/superadmin/reports" },
+    { name: "Logs", icon: History, path: "/superadmin/logs" },
+    { name: "Settings", icon: Settings, path: "/superadmin/settings" },
   ];
+
+  // update activeItem when the URL changes
+  useEffect(() => {
+    const current = navItems.find((n) => location.pathname.startsWith(n.path));
+    if (current) setActiveItem(current.name);
+  }, [location.pathname]);
+
+  // wrapper for sidebar clicks
+  const handleNav = (itemName) => {
+    const item = navItems.find((n) => n.name === itemName);
+    if (item) {
+      setActiveItem(itemName);
+      navigate(item.path);
+    }
+  };
 
   // --- Logout handler ---
   const handleLogout = () => {
@@ -61,35 +71,13 @@ export default function OwnerDashboard() {
     window.location.href = "/login";
   };
 
-  // --- Render content based on active sidebar item ---
-  const renderContent = () => {
-    switch (activeItem) {
-      case "Dashboard":
-        return <DashboardPage data={dashboardData} />;
-      case "Menu & Inventory":
-        return <MenuListPage />;
-      case "Management":
-        return <ManagementPage data={dashboardData} />;
-      case "Chat Room":
-        return <ChatRoomPage />;
-      case "Reports":
-        return <ReportPage data={dashboardData} />;
-      case "Logs":
-        return <LogsPage data={dashboardData} />;
-      case "Settings":
-        return <SettingsPage data={dashboardData} />;
-      default:
-        return <div>Page not found</div>;
-    }
-  };
-
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <Sidebar
         navItems={navItems}
         activeItem={activeItem}
-        setActiveItem={setActiveItem}
+        setActiveItem={handleNav}
         logoTitle="Paradise"
         logoHighlight="Food"
         onLogout={handleLogout}
@@ -98,13 +86,14 @@ export default function OwnerDashboard() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
-            title="Food Paradise: Owner Dashboard"
-            username="Owner Username"
-            initials="OU"
+          title="Food Paradise: Owner Dashboard"
+          username="Owner Username"
+          initials="OU"
         />
 
         <main className="flex-1 overflow-y-auto p-6">
-          {renderContent()}
+          {/* Outlet renders nested route components */}
+          <Outlet context={dashboardData} />
         </main>
       </div>
     </div>

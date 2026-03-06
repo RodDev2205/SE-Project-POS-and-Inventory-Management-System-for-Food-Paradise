@@ -9,16 +9,10 @@ export default function Modal({ isOpen, onClose, children }) {
       onClick={onClose} // close when clicking outside
     >
       <div
-        className="bg-white rounded-lg shadow-lg p-6 w-96 relative"
+        className="bg-white rounded-lg shadow-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto relative"
         onClick={(e) => e.stopPropagation()} // prevent closing when clicking inside
       >
-        {/* X button */}
-        <button
-          onClick={onClose}
-          className="absolute top-2 right-3 text-gray-600 hover:text-black font-bold"
-        >
-          ✕
-        </button>
+
 
         {/* Modal content */}
         {children}

@@ -1,5 +1,6 @@
-import React, { createContext, useState } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import { io as ioclient } from 'socket.io-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const NotificationContext = createContext();
 
@@ -10,6 +11,44 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState(NOTIFICATIONS);
   // auth state tracks JWT and basic user info for downstream requests
   const [auth, setAuth] = useState({ token: null, user: null });
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // Load auth from AsyncStorage on mount
+  React.useEffect(() => {
+    const loadAuthFromStorage = async () => {
+      try {
+        const storedAuth = await AsyncStorage.getItem('auth');
+        if (storedAuth) {
+          const parsedAuth = JSON.parse(storedAuth);
+          setAuth(parsedAuth);
+        }
+      } catch (error) {
+        console.error('Error loading auth from storage:', error);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+    loadAuthFromStorage();
+  }, []);
+
+  // Persist auth to AsyncStorage whenever it changes
+  React.useEffect(() => {
+    const saveAuthToStorage = async () => {
+      try {
+        if (auth.token) {
+          await AsyncStorage.setItem('auth', JSON.stringify(auth));
+        } else {
+          // If token is cleared, remove from storage
+          await AsyncStorage.removeItem('auth');
+        }
+      } catch (error) {
+        console.error('Error saving auth to storage:', error);
+      }
+    };
+    if (!isAuthLoading) {
+      saveAuthToStorage();
+    }
+  }, [auth, isAuthLoading]);
 
   // clear any retained notifications when provider mounts (handles hot reloads)
   React.useEffect(() => {
@@ -129,6 +168,16 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [auth]);
 
+  // Logout function that clears auth from context and storage
+  const logout = async () => {
+    try {
+      setAuth({ token: null, user: null });
+      await AsyncStorage.removeItem('auth');
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   return (
     <NotificationContext.Provider
       value={{
@@ -142,6 +191,8 @@ export const NotificationProvider = ({ children }) => {
         // authentication helpers
         auth,
         setAuth,
+        logout,
+        isAuthLoading,
       }}
     >
       {children}

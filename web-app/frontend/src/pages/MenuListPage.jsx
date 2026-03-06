@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import MenuListTab from "../components/management/tabs/MenuListTab";
 import InventoryTab from "../components/management/tabs/InventoryTab";
 
 export default function MenuListPage() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("menu");
+
+  // if navigation set a preferred tab, switch on mount
+  useEffect(() => {
+    if (location.state && location.state.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   return (
     <div className="p-6">

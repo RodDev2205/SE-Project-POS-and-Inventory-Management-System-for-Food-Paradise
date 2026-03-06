@@ -9,23 +9,30 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  TextInput,
+  SafeAreaView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import { NotificationContext } from '@/context/NotificationContext';
 
+const API_BASE = 'https://deployment-backend-repo-production.up.railway.app';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
-  const [fullName, setFullName] = useState('Super Admin');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [role, setRole] = useState('Super Admin');
   const [createdAt, setCreatedAt] = useState('');
   const [status, setStatus] = useState('');
 
   // branch/staff management
-  const { auth } = useContext(NotificationContext);
+  const { auth, setAuth } = useContext(NotificationContext);
 
   // load profile details from server (fallback to context)
   useEffect(() => {
@@ -38,8 +45,10 @@ export default function ProfileScreen() {
         );
         if (res.ok) {
           const data = await res.json();
-          setFullName(data.full_name || data.name || '');
+          setFirstName(data.first_name || '');
+          setLastName(data.last_name || '');
           setUsername(data.username || '');
+          setContactNumber(data.contact_number || '');
           setRole(data.role_name || '');
           setCreatedAt(data.created_at || '');
           setStatus(data.status || '');
@@ -49,16 +58,20 @@ export default function ProfileScreen() {
             user: { ...prev.user, ...data, role_name: data.role_name || prev.user?.role_name }
           }));
         } else {
-          setFullName(auth.user.full_name || auth.user.name || '');
+          setFirstName(auth.user.first_name || '');
+          setLastName(auth.user.last_name || '');
           setUsername(auth.user.username || '');
+          setContactNumber(auth.user.contact_number || '');
           setRole(auth.user.role_name || auth.user.role || '');
           setCreatedAt(auth.user.created_at || '');
           setStatus(auth.user.status || '');
         }
       } catch (err) {
         console.error('Failed to load profile', err);
-        setFullName(auth.user.full_name || auth.user.name || '');
+        setFirstName(auth.user.first_name || '');
+        setLastName(auth.user.last_name || '');
         setUsername(auth.user.username || '');
+        setContactNumber(auth.user.contact_number || '');
         setRole(auth.user.role_name || auth.user.role || '');
       }
     };
@@ -77,9 +90,40 @@ export default function ProfileScreen() {
     setIsEditing(!isEditing);
   };
 
-  const handleSaveChanges = () => {
-    Alert.alert('Success', 'Profile updated successfully');
-    setIsEditing(false);
+  const handleSaveChanges = async () => {
+    // send update request
+    try {
+      const body = {
+        first_name: firstName,
+        last_name: lastName,
+        username,
+        contact_number: contactNumber,
+        branch_id: auth.user.branch_id || null,
+      };
+      const res = await fetch(`${API_BASE}/api/users/${auth.user.user_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Update failed');
+      }
+      const data = await res.json();
+      Alert.alert('Success', 'Profile updated successfully');
+      // update context and fields
+      setAuth((prev) => ({
+        token: prev.token,
+        user: { ...prev.user, ...data.user, first_name: firstName, last_name: lastName, contact_number: contactNumber, username }
+      }));
+      setIsEditing(false);
+    } catch (err) {
+      console.error('update profile error', err);
+      Alert.alert('Error', err.message);
+    }
   };
 
   // ---------- branches & staff network ----------
@@ -156,15 +200,62 @@ export default function ProfileScreen() {
           {/* User Info */}
           <View style={styles.infoContainer}>
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Full Name</Text>
-              <Text style={styles.value}>{fullName}</Text>
+              <Text style={styles.label}>First Name</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                />
+              ) : (
+                <Text style={styles.value}>{firstName}</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Last Name</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={lastName}
+                  onChangeText={setLastName}
+                />
+              ) : (
+                <Text style={styles.value}>{lastName}</Text>
+              )}
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.infoRow}>
               <Text style={styles.label}>Username</Text>
-              <Text style={styles.value}>{username}</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={username}
+                  onChangeText={setUsername}
+                />
+              ) : (
+                <Text style={styles.value}>{username}</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Contact Number</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={contactNumber}
+                  onChangeText={setContactNumber}
+                  keyboardType="phone-pad"
+                />
+              ) : (
+                <Text style={styles.value}>{contactNumber || '-'}</Text>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -236,7 +327,7 @@ export default function ProfileScreen() {
           <View style={styles.infoBox}>
             <View style={styles.infoBoxRow}>
               <Text style={styles.infoBoxLabel}>Member Since</Text>
-              <Text style={styles.infoBoxValue}>{createdAt ? new Date(createdAt).toLocaleDateString() : '-'}</Text>
+              <Text style={styles.infoBoxValue}>{createdAt ? new Date(createdAt).toLocaleString() : '-'}</Text>
             </View>
             <View style={styles.infoBoxRow}>
               <Text style={styles.infoBoxLabel}>Last Login</Text>
@@ -406,6 +497,16 @@ const styles = StyleSheet.create({
   // Info Container
   infoContainer: {
     marginBottom: Spacing.lg,
+  },
+  input: {
+    flex: 1,
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
   },
   infoRow: {
     paddingVertical: Spacing.md,

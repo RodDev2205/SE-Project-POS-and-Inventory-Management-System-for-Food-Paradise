@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../config/api';
 
 export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
   const [branchName, setBranchName] = useState("");
@@ -7,6 +9,7 @@ export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
   const [openingTime, setOpeningTime] = useState("");
   const [closingTime, setClosingTime] = useState("");
   const [loading, setLoading] = useState(false);
+  const { success, error: alertError } = useAlert();
 
   // 🔥 Prefill form when modal opens
   useEffect(() => {
@@ -26,8 +29,7 @@ export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
     try {
       const token = localStorage.getItem("token");
 
-      const res = await fetch(
-        `https://deployment-backend-repo-production.up.railway.app/api/branches/${branch._id || branch.id}`,
+      const res = await fetch(`${API_BASE_URL}/api/branches/${branch._id || branch.id}`,
         {
           method: "PUT", // or PATCH if your backend prefers
           headers: {
@@ -47,11 +49,11 @@ export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message || "Failed to update branch");
+        alertError("Error", data.message || "Failed to update branch");
         return;
       }
 
-      alert("Branch updated successfully ✅");
+      success("Success", "Branch updated successfully ✅");
 
       if (onSubmit) {
         onSubmit(data.branch);
@@ -60,7 +62,7 @@ export default function EditBranchModal({ isOpen, onClose, branch, onSubmit }) {
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Server error");
+      alertError("Server Error", "Server error");
     } finally {
       setLoading(false);
     }

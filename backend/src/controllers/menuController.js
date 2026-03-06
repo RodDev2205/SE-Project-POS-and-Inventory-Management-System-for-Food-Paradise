@@ -4,9 +4,16 @@ import path from "path";
 
 // -------------------
 // Multer configuration
+// support configurable upload directory (Railway volume mounted at /app/uploads)
 // -------------------
+const uploadDir = process.env.UPLOAD_DIR || "uploads";
+
+// ensure directory exists when server starts
+import fs from "fs";
+fs.mkdirSync(uploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
 });
 
@@ -19,19 +26,70 @@ export const getAllProducts = async (req, res) => {
   try {
     const userBranchId = req.user.branch_id; // assuming your JWT sets req.user
 
-    const [rows] = await db.query(
-      `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
+    // determine filtering based on query parameters
+    // priority: explicit menu_status param > showArchived flag > default active
+    const menuStatus = req.query.menu_status; // e.g. 'active' or 'archived'
+    const showArchived = req.query.showArchived === '1';
+
+    console.log("getAllProducts - menuStatus param:", menuStatus, "type:", typeof menuStatus);
+
+    // build base query; archived view should not filter by approval_status
+    let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
               p.image_name, p.image_path, p.created_by, p.branch_id,
               c.category_name
        FROM products p
        JOIN categories c ON p.category_id = c.category_id
-       WHERE p.approval_status = 'APPROVED' AND p.branch_id = ?`,
-      [userBranchId]
-    );
+       WHERE p.branch_id = ?`;
+    const params = [userBranchId];
+
+    if (menuStatus === 'archived') {
+      console.log("ARCHIVED BRANCH - keeping all approval states");
+      // keep all approval states for archived items
+    } else {
+      console.log("NON-ARCHIVED BRANCH - adding approval filter");
+      baseQuery += " AND p.approval_status = 'APPROVED'";
+    }
+
+    if (menuStatus) {
+      console.log("Adding menu_status filter:", menuStatus);
+      baseQuery += " AND p.menu_status = ?";
+      params.push(menuStatus);
+    } else if (!showArchived) {
+      console.log("No menuStatus and not showArchived - defaulting to active");
+      baseQuery += " AND p.menu_status = 'active'";
+    }
+
+    console.log("getAllProducts final query=", baseQuery, "params=", params);
+    const [rows] = await db.query(baseQuery, params);
+    console.log("getAllProducts returned", rows.length, "rows with menu_status values:", rows.map(r => r.menu_status));
 
     res.json(rows);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// wrapper for archived tab - directly query without relying on req.query
+export const getArchivedProducts = async (req, res) => {
+  try {
+    const userBranchId = req.user.branch_id;
+    
+    let baseQuery = `SELECT p.product_id, p.product_name, p.price, p.status, p.menu_status, p.approval_status, 
+              p.image_name, p.image_path, p.created_by, p.branch_id,
+              c.category_name
+       FROM products p
+       JOIN categories c ON p.category_id = c.category_id
+       WHERE p.branch_id = ? AND p.menu_status = 'archived'`;
+    const params = [userBranchId];
+
+    console.log("getArchivedProducts query=", baseQuery, "params=", params);
+    const [rows] = await db.query(baseQuery, params);
+    console.log("getArchivedProducts returned", rows.length, "rows with menu_status:", rows.map(r => r.menu_status));
+
+    res.json(rows);
+  } catch (err) {
+    console.error("getArchivedProducts error:", err);
     res.status(500).json({ error: err.message });
   }
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
-import logo from '../assets/logo.png'; // Optional: if you want to use an image logo instead of text
+import logo from '../assets/logo3.png'; // Optional: if you want to use an image logo instead of text
 
 const Sidebar = ({
   logoTitle = "AppTitle",
@@ -10,6 +10,13 @@ const Sidebar = ({
   setActiveItem,
   onLogout,
 }) => {
+  // define which items should be preceded by a divider line
+  const dividerNames = [
+    'Menu',
+    'Menu & Inventory',       // put a line above the dashboard/chat group,       // separate menu/management from inventory group
+    'Reports'          // put a line above reports/logs/settings group
+  ];
+
   return (
     <div className="w-64 bg-white text-gray-800 flex flex-col shadow-lg h-screen">
 
@@ -23,22 +30,25 @@ const Sidebar = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4">
         {navItems.map((item) => {
           const isActive = activeItem === item.name;
           const Icon = item.icon;
+          const needsDivider = dividerNames.includes(item.name);
 
           return (
-            <div
-              key={item.name}
-              className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-200
-                ${isActive ? "bg-green-100 font-semibold text-green-700 shadow-inner" : "hover:bg-green-50"}
-              `}
-              onClick={() => setActiveItem(item.name)}
-            >
-              <Icon className="w-5 h-5 mr-3" />
-              <span>{item.name}</span>
-            </div>
+            <React.Fragment key={item.name}>
+              {needsDivider && <hr className="my-2 border-gray-300" />}
+              <div
+                className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-200
+                  ${isActive ? "bg-green-100 font-semibold text-green-700 shadow-inner" : "hover:bg-green-50"}
+                `}
+                onClick={() => setActiveItem(item.name, item.path)}
+              >
+                <Icon className="w-5 h-5 mr-3" />
+                <span>{item.name}</span>
+              </div>
+            </React.Fragment>
           );
         })}
       </nav>

@@ -1,6 +1,7 @@
 // AddIngredientModal.jsx
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import API_BASE_URL from '../../../config/api';
 
 const AddIngredientModal = ({ isOpen, onClose, onAdd }) => {
   const [form, setForm] = useState({
@@ -41,7 +42,7 @@ const AddIngredientModal = ({ isOpen, onClose, onAdd }) => {
       if (!token) throw new Error("You must be logged in");
 
       const response = await fetch(
-        "https://deployment-backend-repo-production.up.railway.app/api/inventory/add-ingredient",
+        `${API_BASE_URL}/api/inventory/add-ingredient`,
         {
           method: "POST",
           headers: {

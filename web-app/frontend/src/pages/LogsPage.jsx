@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import API_BASE_URL from '../config/api';
 import {
   Search, Filter, Calendar, Download, Clock, User,
   Activity, AlertCircle, CheckCircle, XCircle, Info
@@ -18,7 +19,7 @@ export default function LogsPage() {
     const fetchLogs = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/activity-logs", {
+        const res = await fetch(`${API_BASE_URL}/api/activity-logs`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

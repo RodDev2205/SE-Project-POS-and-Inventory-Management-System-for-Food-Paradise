@@ -6,6 +6,7 @@ import ReceiptModal from "../components/POScomponent/Modal/ReceiptModal";
 import VoidTransactionModal from "../components/POScomponent/Modal/VoidTransactionModal";
 import PaymentModal from "../components/POScomponent/Modal/PaymentModal";
 import Notification from "../components/common/Notification";
+import API_BASE_URL from '../config/api';
 
 export default function POSCashier({ isCashier, isAdmin }) {
   const [cart, setCart] = useState([]);
@@ -23,7 +24,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
   useEffect(() => {
     setLoading(true);
     setError("");
-    fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
+    fetch(`${API_BASE_URL}/api/menu`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     })
       .then((res) => {
@@ -72,7 +73,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
     }
 
     try {
-      const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/pos/complete-sale", {
+      const response = await fetch(`${API_BASE_URL}/api/pos/complete-sale`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

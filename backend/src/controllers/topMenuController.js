@@ -31,6 +31,15 @@ export async function getTopMenuItems(req, res) {
         AND t.created_at BETWEEN ? AND ?
     `;
     const params = [startSql, endSql];
+    // debug info
+    console.log('getTopMenuItems called with', {
+      startSql,
+      endSql,
+      branchId: req.query.branchId,
+      role_id,
+      userBranch,
+      limit
+    });
 
     // restrict for admin to their branch, or respect branchId query param for superadmin
     if (role_id === 2) {
@@ -38,16 +47,25 @@ export async function getTopMenuItems(req, res) {
       params.push(userBranch);
     } else if (req.query.branchId) {
       // superadmin can filter by specific branch
-      query += ` AND t.branch_id = ?`;
-      params.push(parseInt(req.query.branchId));
+      const bid = parseInt(req.query.branchId);
+      if (!isNaN(bid)) {
+        query += ` AND t.branch_id = ?`;
+        params.push(bid);
+      }
     }
+
+    let lim = parseInt(limit);
+    if (isNaN(lim) || lim <= 0) lim = 10;
 
     query += `
       GROUP BY p.product_id, p.product_name
       ORDER BY sold DESC
-      LIMIT ?
+      LIMIT ${lim}
     `;
-    params.push(parseInt(limit));
+
+    // Log built SQL and params to help diagnose bad arguments
+    console.log('getTopMenuItems SQL:', query);
+    console.log('getTopMenuItems params:', params);
 
     const [rows] = await db.execute(query, params);
     return res.json(rows || []);

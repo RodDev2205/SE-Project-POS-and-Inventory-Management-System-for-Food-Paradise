@@ -1,6 +1,7 @@
 // InventoryManagement.jsx
 import React, { useState, useEffect } from "react";
 import { AlertTriangle, Plus, Edit } from "lucide-react";
+import API_BASE_URL from '../../config/api';
 import AddIngredientModal from "../inventory/models/AddIngredientModal";
 import EditIngredientModal from "../inventory/models/EditIngredientModal";
 
@@ -18,14 +19,9 @@ const InventoryManagement = () => {
 
       console.log("TOKEN:", token);
 
-      const response = await fetch(
-        "https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/inventory/get-ingredients`, {
+          headers: { Authorization: `Bearer ${token}` },
+      });
 
       const text = await response.text();
       console.log("RAW RESPONSE:", text);
@@ -35,7 +31,15 @@ const InventoryManagement = () => {
       }
 
       const data = JSON.parse(text);
-      setInventory(data);
+
+      // Ensure inventory is always an array
+      if (Array.isArray(data)) {
+        setInventory(data);
+      } else if (Array.isArray(data.data)) {
+        setInventory(data.data);
+      } else {
+        setInventory([]); // fallback safety
+      }
 
     } catch (error) {
       console.error("Fetch error:", error);
@@ -60,9 +64,21 @@ const InventoryManagement = () => {
   };
 
   // Low stock is determined by units (quantity) compared to low_stock_threshold
-  const lowStockItems = inventory.filter(
-    (item) => Number(item.quantity) <= Number(item.low_stock_threshold)
-  );
+  const lowStockItems = Array.isArray(inventory)
+    ? inventory.filter(
+        (item) =>
+          Number(item.quantity) > 0 && 
+          Number(item.quantity) <= Number(item.low_stock_threshold)
+      )
+    : [];
+
+  // No stock items
+  const noStockItems = Array.isArray(inventory)
+    ? inventory.filter(
+        (item) =>
+          Number(item.quantity) <= 0 || item.status === 'out_of_stock'
+      )
+    : [];
 
   if (loading) {
     return <div className="p-8">Loading inventory...</div>;
@@ -80,12 +96,19 @@ const InventoryManagement = () => {
       </div>
 
       {/* Dashboard Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <DashboardCard title="Total Ingredients" value={inventory.length} />
         <DashboardCard
           title="Low Stock Items"
           value={lowStockItems.length}
           alert={lowStockItems.length > 0}
+          alertColor="yellow"
+        />
+        <DashboardCard
+          title="No Stock Items"
+          value={noStockItems.length}
+          alert={noStockItems.length > 0}
+          alertColor="red"
         />
       </div>
 
@@ -159,11 +182,11 @@ const InventoryManagement = () => {
                         </span>
 
                         {isNoStock ? (
-                          <span className="text-xs text-white flex items-center gap-1 px-2 py-0.5 bg-gray-600 rounded-full">
+                          <span className="text-xs font-medium text-red-700 flex items-center gap-1 px-2 py-0.5 bg-red-300 rounded-full">
                             No Stock
                           </span>
                         ) : isLow ? (
-                          <span className="text-xs text-red-500 flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-full">
+                          <span className="text-xs font-medium text-yellow-700 flex items-center gap-1 px-2 py-0.5 bg-yellow-300 rounded-full">
                             <AlertTriangle size={14} /> Low
                           </span>
                         ) : null}
@@ -174,11 +197,13 @@ const InventoryManagement = () => {
                       <span
                         className={`px-4 py-1.5 rounded-full text-xs font-medium ${
                           item.status === "available" ? "bg-green-100 text-green-700" :
-                          item.status === "low_stock" ? "bg-yellow-100 text-yellow-800" :
-                          item.status === "out_of_stock" ? "bg-gray-600 text-white" : "bg-gray-200 text-gray-600"
+                          item.status === "low_stock" ? "bg-yellow-100 text-yellow-700" :
+                          item.status === "out_of_stock" ? "bg-red-100 text-red-700" : "bg-gray-200 text-gray-600"
                         }`}
                       >
-                        {item.status}
+                        {item.status === "low_stock" ? "Low Stock" :
+                         item.status === "out_of_stock" ? "No Stock" :
+                         item.status}
                       </span>
                     </td>
 
@@ -230,21 +255,32 @@ const InventoryManagement = () => {
   );
 };
 
-const DashboardCard = ({ title, value, alert }) => (
-  <div
-    className={`p-6 rounded-2xl shadow-md ${
-      alert ? "bg-red-50" : "bg-white"
-    } hover:shadow-lg transition`}
-  >
-    <h3 className="text-gray-500 text-sm">{title}</h3>
-    <p
-      className={`text-2xl font-bold ${
-        alert ? "text-red-600" : "text-gray-800"
-      }`}
+const DashboardCard = ({ title, value, alert, alertColor = "red" }) => {
+  const bgColorMap = {
+    red: "bg-red-50",
+    yellow: "bg-yellow-50",
+  };
+  const textColorMap = {
+    red: "text-red-600",
+    yellow: "text-yellow-600",
+  };
+
+  return (
+    <div
+      className={`p-6 rounded-2xl shadow-md ${
+        alert ? bgColorMap[alertColor] : "bg-white"
+      } hover:shadow-lg transition`}
     >
-      {value}
-    </p>
-  </div>
-);
+      <h3 className="text-gray-500 text-sm">{title}</h3>
+      <p
+        className={`text-2xl font-bold ${
+          alert ? textColorMap[alertColor] : "text-gray-800"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+};
 
 export default InventoryManagement;

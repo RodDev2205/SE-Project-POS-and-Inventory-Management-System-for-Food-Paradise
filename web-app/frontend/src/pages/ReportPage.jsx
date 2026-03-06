@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Filter, TrendingUp, PhilippinePeso, Package, Users, BarChart3 } from 'lucide-react';
+import API_BASE_URL from '../config/api';
 import {
   LineChart,
   Line,
@@ -157,7 +158,7 @@ export default function ReportPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branches', {
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/branches`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch branches');
@@ -177,7 +178,7 @@ export default function ReportPage() {
         if (!token) return;
         const { startDate, endDate } = getRangeDates(dateRange);
         const branchParam = selectedBranch && selectedBranch !== 'all' ? `&branchId=${selectedBranch}` : '';
-        const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/kpis?startDate=${startDate}&endDate=${endDate}${branchParam}`, {
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/kpis?startDate=${startDate}&endDate=${endDate}${branchParam}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch KPIs');
@@ -215,7 +216,7 @@ export default function ReportPage() {
           trendEnd = fmt(now);
         }
         const branchParam = selectedBranch && selectedBranch !== 'all' ? `&branchId=${selectedBranch}` : '';
-        const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/sales-trend?period=${dateRange}&startDate=${trendStart}&endDate=${trendEnd}${branchParam}`, {
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/sales-trend?period=${dateRange}&startDate=${trendStart}&endDate=${trendEnd}${branchParam}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch trend');
@@ -234,7 +235,7 @@ export default function ReportPage() {
         const token = localStorage.getItem('token');
         if (!token) return;
         const { startDate, endDate } = getRangeDates(dateRange);
-        const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/branch-comparison?startDate=${startDate}&endDate=${endDate}`, {
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/branch-comparison?startDate=${startDate}&endDate=${endDate}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch branch comparison');
@@ -259,10 +260,14 @@ export default function ReportPage() {
         if (!token) return;
         const { startDate, endDate } = getRangeDates(dateRange);
         const branchParam = selectedBranch && selectedBranch !== 'all' ? `&branchId=${selectedBranch}` : '';
-        const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/sales-superadmin/top-menu-items?startDate=${startDate}&endDate=${endDate}${branchParam}`, {
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/top-menu-items?startDate=${startDate}&endDate=${endDate}${branchParam}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        if (!res.ok) throw new Error('Failed to fetch menu performance');
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('menu performance API error body', errText);
+          throw new Error(`Failed to fetch menu performance: ${res.status}`);
+        }
         const data = await res.json();
         setMenuPerformance(data || []);
       } catch (err) {

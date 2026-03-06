@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../../config/api';
 
 export default function ReceiptModal({
   transactionId,
@@ -9,6 +11,7 @@ export default function ReceiptModal({
   onClose,
 }) {
   const [showSuccess, setShowSuccess] = useState(false);
+  const { error } = useAlert();
 
   const handlePrint = async () => {
     const payload = {
@@ -21,7 +24,7 @@ export default function ReceiptModal({
     };
 
     try {
-      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/print-receipt", {
+      const res = await fetch(`${API_BASE_URL}/api/print-receipt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -38,11 +41,11 @@ export default function ReceiptModal({
           onClose();
         }, 2000);
       } else {
-        alert("Printer error: " + data.message);
+        error("Printer Error", data.message ? `Printer error: ${data.message}` : "Failed to print receipt.");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to print receipt.");
+      error("Print Failed", "Failed to print receipt.");
     }
   };
 

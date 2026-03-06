@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { AlertProvider } from "./context/AlertContext";
 
 import Login from "./pages/Login";
 import AdminOwnerDashboard from "./pages/AdminDashboardPage";
@@ -10,13 +11,16 @@ import ManagementPage from "./pages/ManagementPage";
 import ReportPage from "./pages/ReportPage";
 import LogsPage from "./pages/LogsPage";
 import SettingsPage from "./pages/SettingsPage";
+import ChatRoomPage from "./pages/ChatRoomPage";
+import MenuListPage from "./pages/MenuListPage";
 
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
-    <Router>
+    <AlertProvider>
+      <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         {/* PUBLIC ROUTE */}
@@ -24,7 +28,7 @@ function App() {
 
         {/* OWNER ROUTE — allowedRoles example: 2 = admin, 3 = superadmin */}
         <Route
-          path="/admin"
+          path="/admin/*"
           element={
             <ProtectedRoute allowedRoles={[2]}>
               <AdminOwnerDashboard />
@@ -42,6 +46,8 @@ function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="chat-room" element={<ChatRoomPage />} />
+          <Route path="menu-inventory" element={<MenuListPage />} />
           <Route path="management" element={<ManagementPage />} />
           <Route path="reports" element={<ReportPage />} />
           <Route path="logs" element={<LogsPage />} />
@@ -52,13 +58,13 @@ function App() {
         <Route
           path="/pos"
           element={
-            <ProtectedRoute allowedRoles={[1]}>
+            <ProtectedRoute allowedRoles={[1, 2]}>
               <POS />
             </ProtectedRoute>
           }
         />
 
-        {/* OTHER PAGES (only cashiers allowed?) */}
+        {/* OTHER PAGES (only cashiers allowed?)        /> */}
         <Route
           path="/records"
           element={
@@ -79,6 +85,7 @@ function App() {
 
       </Routes>
     </Router>
+    </AlertProvider>
   );
 }
 

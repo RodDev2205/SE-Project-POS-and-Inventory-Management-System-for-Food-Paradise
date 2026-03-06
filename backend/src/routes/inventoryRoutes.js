@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import { verifyToken } from '../middlewares/verifyToken.js';
 import { requireRole } from '../middlewares/requireRole.js';
-import { addIngredient, getIngredientsByBranch, editIngredientById, getAllInventoryItems, getInventoryCount, getLowStockCount } from '../controllers/inventoryController.js';
+import { addIngredient,
+         getIngredientsByBranch, 
+         editIngredientById, 
+         getAllInventoryItems, 
+         getInventoryCount, 
+         getLowStockCount,
+         getLowStockItems } from '../controllers/inventoryController.js';
 
 const router = Router();
 
@@ -51,6 +57,14 @@ router.get(
   verifyToken,
   requireRole(2, 3),
   getLowStockCount
+);
+
+// Get list of low-stock inventory items (limited) for overview dashboard
+router.get(
+  '/low-stock-items',
+  verifyToken,
+  requireRole(2, 3),
+  getLowStockItems
 );
 
 

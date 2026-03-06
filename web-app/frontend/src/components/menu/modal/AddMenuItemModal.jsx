@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import API_BASE_URL from '../../../config/api';
 
 export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categories = [] }) {
   // Note: don't return before hooks — hooks must run consistently
@@ -27,7 +28,7 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
 
   // Categories from API (always fetch for fresh database data)
   const [localCategories, setLocalCategories] = useState([]);
-  const API_CATEGORIES = "https://deployment-backend-repo-production.up.railway.app/api/categories";
+  const API_CATEGORIES = `${API_BASE_URL}/api/categories`;
 
   const fetchCategories = async () => {
     try {
@@ -139,7 +140,7 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
     setLoadingIngredients(true);
     try {
       const token = localStorage.getItem("token");
-      const API_INVENTORY = "https://deployment-backend-repo-production.up.railway.app/api/inventory";
+      const API_INVENTORY = `${API_BASE_URL}/api/inventory`;
       const res = await fetch(`${API_INVENTORY}/get-ingredients?page=${pageToLoad}&limit=${limit}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -199,7 +200,7 @@ export default function AddMenuItemModal({ isOpen, onClose, onAddItem, categorie
 
     try {
       const token = localStorage.getItem("token");
-      const API_MENU = "https://deployment-backend-repo-production.up.railway.app/api/menu";
+      const API_MENU = `${API_BASE_URL}/api/menu`;
 
       // Build FormData for multipart/form-data (file + JSON fields)
       const formData = new FormData();

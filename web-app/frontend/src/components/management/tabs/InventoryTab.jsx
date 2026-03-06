@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, AlertTriangle } from "lucide-react";
+import API_BASE_URL from '../../../config/api';
 
 export default function InventoryTab() {
   const [inventory, setInventory] = useState([]);
@@ -17,14 +18,9 @@ export default function InventoryTab() {
 
       // Try to get all inventory first (superadmin)
       try {
-        const allResponse = await fetch(
-          "https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const allResponse = await fetch(`${API_BASE_URL}/api/inventory/all-inventory`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (allResponse.ok) {
           const data = await allResponse.json();
@@ -37,14 +33,9 @@ export default function InventoryTab() {
       }
 
       // Fall back to branch-specific inventory
-      const response = await fetch(
-        "https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/inventory/get-ingredients`, {
+          headers: { Authorization: `Bearer ${token}` },
+      });
 
       const data = await response.json();
 
@@ -245,12 +236,16 @@ export default function InventoryTab() {
                     <td className="px-6 py-4">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          item.status === "active"
+                          item.status === "available"
                             ? "bg-green-100 text-green-700"
+                            : item.status === "low_stock"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : item.status === "out_of_stock"
+                            ? "bg-red-100 text-red-700"
                             : "bg-gray-200 text-gray-600"
                         }`}
                       >
-                        {item.status}
+                        {item.status.replace(/_/g, " ")}
                       </span>
                     </td>
                   </tr>

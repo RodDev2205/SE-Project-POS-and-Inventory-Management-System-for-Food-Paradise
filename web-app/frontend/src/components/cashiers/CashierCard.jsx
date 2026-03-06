@@ -16,7 +16,7 @@ export default function CashierCard({ cashier, onEdit, onResetPassword, onToggle
         <div className="flex items-center">
           <User className="w-8 h-8 text-[#1B5E20] mr-3 p-1 bg-green-50 rounded-full" />
           <div>
-            <h4 className="text-xl font-bold text-gray-800">{cashier.full_name}</h4>
+            <h4 className="text-xl font-bold text-gray-800">{cashier.first_name} {cashier.last_name}</h4>
             <p className="text-sm text-gray-500">@{cashier.username}</p>
           </div>
         </div>
@@ -31,6 +31,12 @@ export default function CashierCard({ cashier, onEdit, onResetPassword, onToggle
           <span className="font-medium text-gray-600">Role:</span>
           <span className="font-semibold text-indigo-600">
             {cashier.role_id === 1 ? "Cashier" : "Other"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="font-medium text-gray-600">Contact:</span>
+          <span className="text-gray-500">
+            {cashier.contact_number || "N/A"}
           </span>
         </div>
         <div className="flex justify-between">

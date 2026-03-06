@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../../config/api';
 
 export default function MenuListTab() {
   const [products, setProducts] = useState([]);
@@ -12,9 +14,12 @@ export default function MenuListTab() {
   const [linkedIngredients, setLinkedIngredients] = useState([]);
   const [loadingIngredients, setLoadingIngredients] = useState(false);
 
+  // alert hook
+  const { error, warning, success, info, confirm, danger } = useAlert();
+
   const ITEMS_PER_PAGE = 8;
-  const API_URL = "https://deployment-backend-repo-production.up.railway.app/api/menu-superadmin/products";
-  const API_MENU_INVENTORY = "https://deployment-backend-repo-production.up.railway.app/api/menu-superadmin/menu-inventory";
+  const API_URL = `${API_BASE_URL}/api/menu-superadmin/products`;
+  const API_MENU_INVENTORY = `${API_BASE_URL}/api/menu-superadmin/menu-inventory`;
 
   // 🔹 Fetch from backend
   useEffect(() => {
@@ -49,7 +54,7 @@ export default function MenuListTab() {
     if (!selectedProduct) return;
 
     if (status === "DECLINED" && note.trim() === "") {
-      alert("Please provide a note when declining.");
+      warning("Input Required", "Please provide a note when declining.");
       return;
     }
 
@@ -220,7 +225,7 @@ export default function MenuListTab() {
             <div className="h-24 bg-gray-100 rounded mb-4 flex items-center justify-center">
               {item.image_path ? (
                 <img
-                  src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`}
+                  src={`${API_BASE_URL}${item.image_path}`}
                   alt={item.product_name}
                   className="h-full object-cover rounded"
                 />
@@ -275,7 +280,7 @@ export default function MenuListTab() {
               <div className="bg-gray-50 rounded-xl flex items-center justify-center h-64 overflow-hidden">
                 {selectedProduct.image_path ? (
                   <img
-                    src={`https://deployment-backend-repo-production.up.railway.app${selectedProduct.image_path}`}
+                    src={`${API_BASE_URL}${selectedProduct.image_path}`}
                     alt={selectedProduct.product_name}
                     className="object-cover h-full w-full"
                   />

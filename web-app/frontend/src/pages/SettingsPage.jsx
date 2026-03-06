@@ -1,253 +1,144 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, Lock, Camera, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import API_BASE_URL from '../config/api';
+import { Eye, EyeOff } from 'lucide-react';
 
-export default function OwnerProfileSettings() {
-  const [formData, setFormData] = useState({
-    username: 'OU',
-    fullName: '',
-    email: '',
-    phone: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
+export default function SimpleSettings() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [bugReport, setBugReport] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [pinCode, setPinCode] = useState('');
+  const [roleId, setRoleId] = useState(null); // store user's role
 
-  const [profileImage, setProfileImage] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
+  // Fetch user info (role) and pin code if admin
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const token = localStorage.getItem('token'); // adjust if JWT stored differently
+        if (!token) return;
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+        // Decode JWT locally to get role_id (simple parsing)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setRoleId(payload.role_id);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImage(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+        // Only fetch pin code if admin
+        if (payload.role_id === 2) {
+          // admin only endpoint
+          const res = await fetch(`${API_BASE_URL}/api/admin/pin-code`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error('Failed to fetch pin code');
+          const data = await res.json();
+          setPinCode(data.pin_code || '');
+        }
+      } catch (error) {
+        console.error('Error fetching user info / pin code:', error);
+        // only show N/A if admin tried to load pin
+        if (roleId === 2) {
+          setPinCode('N/A');
+        }
+      }
+    };
 
-  const handleSubmit = () => {
-    alert('Profile updated successfully!');
-  };
+    fetchUserInfo();
+  }, []);
 
   return (
-    <div className="min-h-screen mx-auto bg-gray-100 p-6">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Owner Profile Settings</h2>
+    <div className="flex-1 flex flex-col overflow-auto bg-gray-100">
+      <div className="flex h-full">
 
-      {/* Tabs */}
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'profile'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Profile Information
-        </button>
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'security'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Security
-        </button>
-      </div>
+        {/* Left Column */}
+        <div className="flex-1 p-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Settings</h1>
+          <p className="text-sm text-gray-600 mb-8">Queries, bug reports, and customization</p>
 
-      <div className="bg-white rounded-lg shadow-md p-8">
-        {activeTab === 'profile' && (
-          <div className="space-y-6">
-            {/* Profile Picture */}
-            <div className="flex items-center gap-6">
+          {/* Profile Settings */}
+          <div className="bg-white rounded-lg p-6 shadow-sm mb-6">
+            <h2 className="text-base font-bold mb-4">Profile Settings</h2>
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Username:</label>
+              <input
+                type="text"
+                defaultValue="↑pcashier4"
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-emerald-700"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Password:</label>
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                  {profileImage ? (
-                    <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-12 h-12 text-gray-400" />
-                  )}
-                </div>
-                <label className="absolute bottom-0 right-0 bg-green-600 p-2 rounded-full cursor-pointer hover:bg-green-700 transition-colors">
-                  <Camera className="w-4 h-4 text-white" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">Profile Picture</h3>
-                <p className="text-sm text-gray-500">Upload a professional photo</p>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  defaultValue="password123"
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-emerald-700 pr-10"
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            {/* Only show Pin Code if user is admin */}
+            {roleId === 2 && (
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Void Pin Code:</label>
                 <input
                   type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter username"
+                  value={pinCode}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-100 cursor-not-allowed"
                 />
               </div>
-            </div>
+            )}
 
-            {/* Full Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter full name"
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter email address"
-                />
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter phone number"
-                />
-              </div>
-            </div>
+            <button className="px-5 py-2 bg-emerald-700 text-white text-sm rounded font-semibold hover:bg-emerald-800">
+              Update Username and Password
+            </button>
           </div>
-        )}
-
-        {activeTab === 'security' && (
-          <div className="space-y-6">
-            {/* Current Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Current Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="password"
-                  name="currentPassword"
-                  value={formData.currentPassword}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter current password"
-                />
-              </div>
-            </div>
-
-            {/* New Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                New Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="password"
-                  name="newPassword"
-                  value={formData.newPassword}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter new password"
-                />
-              </div>
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm New Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Confirm new password"
-                />
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm text-yellow-800">
-                <strong>Password Requirements:</strong> At least 8 characters, including uppercase, lowercase, number, and special character.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Save Changes
-          </button>
         </div>
+
+        {/* Right Column */}
+        <div className="flex-1 p-8">
+          <div className="mt-16">
+            {/* Bug Reports */}
+            <div className="bg-white rounded-lg p-6 shadow-sm mb-6">
+              <h2 className="text-base font-bold mb-1">Bug Reports</h2>
+              <p className="text-xs text-gray-600 mb-4">
+                Found bug/s or errors? Please let your managers know, and send us a report.
+              </p>
+              <textarea
+                value={bugReport}
+                onChange={(e) => setBugReport(e.target.value)}
+                placeholder="Enter your report here and specify where the bug was found."
+                className="w-full border border-gray-300 rounded p-3 text-sm outline-none focus:ring-1 focus:ring-emerald-700 resize-none h-24 mb-4"
+              />
+              <button className="w-full py-2 bg-emerald-700 text-white text-sm rounded font-semibold hover:bg-emerald-800">
+                Submit bug report
+              </button>
+            </div>
+
+            {/* Feedback */}
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              <h2 className="text-base font-bold mb-1">Got any Feedback or Suggestions?</h2>
+              <p className="text-xs text-gray-600 mb-4">
+                Feedback on the system's performance is always welcomed! Let us work together to improve overall performance.
+              </p>
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Enter your feedback/suggestions here. We'd love to hear your opinions!"
+                className="w-full border border-gray-300 rounded p-3 text-sm outline-none focus:ring-1 focus:ring-emerald-700 resize-none h-24 mb-4"
+              />
+              <button className="w-full py-2 bg-emerald-700 text-white text-sm rounded font-semibold hover:bg-emerald-800">
+                Send us your feedback
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

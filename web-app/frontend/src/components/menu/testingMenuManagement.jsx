@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useAlert } from "@/context/AlertContext";
 import AddMenuItemModal from "../menu/modal/AddMenuItemModal";
 import EditMenuItemModal from "../menu/modal/EditMenuItemModal";
 import { Edit2, Trash2, Search } from "lucide-react";
+import API_BASE_URL from '../../config/api';
 
 export default function MenuManagementUI() {
   const [menuItems, setMenuItems] = useState([]);
@@ -15,9 +17,12 @@ export default function MenuManagementUI() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("Menu List");
+  const [activeTab, setActiveTab] = useState("Menu List"); // possible values: Menu List, Archived, Declined
 
-  const API_BASE = "https://deployment-backend-repo-production.up.railway.app/api";
+  // alert hooks
+  const { error: alertError, warning, success, confirm, danger } = useAlert();
+
+  const API_BASE = `${API_BASE_URL}/api`;
 
   const fetchDeclinedItems = async () => {
     try {
@@ -34,60 +39,64 @@ export default function MenuManagementUI() {
     }
   };
 
-  const refreshProducts = async () => {
+  // fetch only archived products
+  const fetchArchivedItems = async () => {
+    console.log("fetchArchivedItems called");
+    // call dedicated archived endpoint
     try {
+      setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) return;
-      const res = await fetch(`${API_BASE}/menu`, {
+      const response = await fetch(`${API_BASE}/menu/archived`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to fetch products");
-      const data = await res.json();
+      if (!response.ok) throw new Error("Failed to fetch archived items");
+      const data = await response.json();
+      console.log("fetchArchivedItems received data:", data);
+      console.log("Data lengths - received:", data.length, "menu_status values:", data.map(item => item.menu_status));
       setMenuItems(data);
     } catch (err) {
+      console.error("fetchArchivedItems error", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // generic product fetcher, can request specific status
+  const fetchProducts = async (status = null) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Not authenticated. Please login.");
+        setLoading(false);
+        return;
+      }
+      const statusParam = status || (activeTab === 'Archived' ? 'archived' : 'active');
+      console.log("fetchProducts using statusParam=", statusParam);
+      const response = await fetch(`${API_BASE}/menu?menu_status=${statusParam}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        throw new Error("Unauthorized (401) - token missing or expired. Please login.");
+      }
+      if (!response.ok) throw new Error("Failed to fetch products");
+      const data = await response.json();
+      setMenuItems(data);
+    } catch (err) {
+      setError(err.message);
       console.error("Fetch products failed:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   // Fetch products from API
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem("token");
-        // guard: require token
-        if (!token) {
-          setError("Not authenticated. Please login.");
-          setLoading(false);
-          return;
-        }
-        // debug: log token presence (never log full token in production)
-        console.debug("fetchProducts: token present", !!token);
-
-        const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-          },
-        });
-        if (response.status === 401) {
-          // clear possible invalid token and provide clearer message
-          localStorage.removeItem("token");
-          throw new Error("Unauthorized (401) - token missing or expired. Please login.");
-        }
-        if (!response.ok) throw new Error("Failed to fetch products");
-        const data = await response.json();
-        setMenuItems(data);
-      } catch (err) {
-        setError(err.message);
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const fetchCategories = async () => {
       try {
-        const response = await fetch("https://deployment-backend-repo-production.up.railway.app/api/categories");
+        const response = await fetch(`${API_BASE}/categories`);
         if (!response.ok) throw new Error("Failed to fetch categories");
         const data = await response.json();
         setCategories(data);
@@ -96,7 +105,7 @@ export default function MenuManagementUI() {
       }
     };
 
-    fetchProducts();
+    fetchProducts('active');
     fetchCategories();
   }, []);
 
@@ -112,16 +121,12 @@ export default function MenuManagementUI() {
 
   const handleAddItem = (item) => {
     console.log("New Item:", item);
-    // Refresh products after adding new item
-    const token = localStorage.getItem("token");
-    fetch("https://deployment-backend-repo-production.up.railway.app/api/menu", {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => setMenuItems(data))
-      .catch((err) => console.error(err));
+    // Refresh products after adding new item using same status filter as current tab
+    if (activeTab === 'Archived') {
+      fetchArchivedItems();
+    } else {
+      fetchProducts('active');
+    }
   };
 
   const handleEdit = (item) => {
@@ -131,23 +136,30 @@ export default function MenuManagementUI() {
   };
 
   const handleDelete = (productId) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      const token = localStorage.getItem("token");
-      fetch(`https://deployment-backend-repo-production.up.railway.app/api/menu/${productId}`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      })
-        .then((res) => {
+    danger(
+      "Delete Item",
+      "Are you sure you want to delete this item?",
+      async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const res = await fetch(`${API_BASE}/menu/${productId}`, {
+            method: "DELETE",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+          });
           if (res.ok) {
             setMenuItems((prev) => prev.filter((item) => item.product_id !== productId));
+            success("Deleted", "Menu item removed successfully.");
           } else {
-            alert("Failed to delete item");
+            alertError("Delete Failed", "Failed to delete item");
           }
-        })
-        .catch((err) => console.error(err));
-    }
+        } catch (err) {
+          console.error(err);
+          alertError("Error", err.message);
+        }
+      }
+    );
   };
 
   return (
@@ -164,10 +176,21 @@ export default function MenuManagementUI() {
 
       {/* Tabs */}
       <div className="flex gap-2 mt-4 mb-2">
-        {['Menu List', 'Declined'].map((t) => (
+        {['Menu List', 'Archived', 'Declined'].map((t) => (
           <button
             key={t}
-            onClick={() => { setActiveTab(t); if (t === 'Declined') fetchDeclinedItems(); }}
+            onClick={() => {
+              setActiveTab(t);
+              setActiveCategory("All Items"); // clear category filter when switching tabs
+              setSearchTerm(""); // reset search input as well
+              if (t === 'Declined') {
+                fetchDeclinedItems();
+              } else if (t === 'Archived') {
+                fetchArchivedItems();
+              } else {
+                fetchProducts('active');
+              }
+            }}
             className={`px-4 py-2 rounded ${activeTab === t ? 'bg-green-600 text-white' : 'bg-white border'}`}
           >
             {t}
@@ -214,13 +237,13 @@ export default function MenuManagementUI() {
           <p className="text-center col-span-4 text-gray-500 py-10">Loading...</p>
         ) : error ? (
           <p className="text-center col-span-4 text-red-500 py-10">Error: {error}</p>
-        ) : activeTab === 'Menu List' ? (
+        ) : activeTab === 'Menu List' || activeTab === 'Archived' ? (
           filteredItems.length > 0 ? (
             filteredItems.map((item) => (
               <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
                 {item.image_path && (
                   <img 
-                    src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`} 
+                    src={`${API_BASE_URL}${item.image_path}`} 
                     alt={item.product_name}
                     className="w-full h-48 object-cover rounded-lg mb-3"
                   />
@@ -263,7 +286,7 @@ export default function MenuManagementUI() {
               <div key={item.product_id} className="bg-white shadow-md p-4 rounded-xl overflow-hidden flex flex-col h-full">
                 {item.image_path && (
                   <img 
-                    src={`https://deployment-backend-repo-production.up.railway.app${item.image_path}`} 
+                    src={`${API_BASE_URL}${item.image_path}`} 
                     alt={item.product_name}
                     className="w-full h-48 object-cover rounded-lg mb-3"
                   />
@@ -316,7 +339,11 @@ export default function MenuManagementUI() {
         onClose={() => setIsEditOpen(false)}
         onSaved={() => {
           // refresh lists after save
-          refreshProducts();
+          if (activeTab === 'Archived') {
+            fetchArchivedItems();
+          } else {
+            fetchProducts('active');
+          }
           fetchDeclinedItems();
           setIsEditOpen(false);
         }}

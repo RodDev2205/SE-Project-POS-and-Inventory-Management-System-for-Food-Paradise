@@ -47,15 +47,20 @@ export const addIngredient = async (req, res) => {
 // GET ingredients for the current user's branch
 export const getIngredientsByBranch = async (req, res) => {
   try {
-    const branch_id = req.user.branch_id;
+    const branch_id = Number(req.user.branch_id);
+    if (isNaN(branch_id)) {
+      return res.status(400).json({ message: "Invalid branch_id" });
+    }
 
-    // Get pagination values from query
-    const page = parseInt(req.query.page) || null;
-    const limit = parseInt(req.query.limit) || null;
+    const page = parseInt(req.query.page) || 1;      // default to page 1
+    const limit = parseInt(req.query.limit) || 10;   // default to 10 items per page
+    const offset = (page - 1) * limit;
 
-    // If no pagination → return all (for inventory page)
-    if (!page || !limit) {
-      const [rows] = await db.execute(
+    let rows, total;
+
+    if (!req.query.page || !req.query.limit) {
+      // No pagination → return all
+      [rows] = await db.execute(
         `SELECT *
          FROM inventory
          WHERE branch_id = ?
@@ -63,28 +68,30 @@ export const getIngredientsByBranch = async (req, res) => {
         [branch_id]
       );
 
-      return res.status(200).json(rows);
+      [[{ total }]] = await db.execute(
+        `SELECT COUNT(*) as total
+         FROM inventory
+         WHERE branch_id = ?`,
+        [branch_id]
+      );
+    } else {
+      // Pagination: LIMIT and OFFSET must be literal integers (not bound parameters)
+      [rows] = await db.execute(
+        `SELECT *
+         FROM inventory
+         WHERE branch_id = ?
+         ORDER BY item_name ASC
+         LIMIT ${limit} OFFSET ${offset}`,
+        [branch_id]
+      );
+
+      [[{ total }]] = await db.execute(
+        `SELECT COUNT(*) as total
+         FROM inventory
+         WHERE branch_id = ?`,
+        [branch_id]
+      );
     }
-
-    // If pagination requested → apply LIMIT + OFFSET
-    const offset = (page - 1) * limit;
-
-    const [rows] = await db.execute(
-      `SELECT *
-       FROM inventory
-       WHERE branch_id = ?
-       ORDER BY item_name ASC
-       LIMIT ? OFFSET ?`,
-      [branch_id, limit, offset]
-    );
-
-    // Also get total count for pagination control
-    const [[{ total }]] = await db.execute(
-      `SELECT COUNT(*) as total
-       FROM inventory
-       WHERE branch_id = ?`,
-      [branch_id]
-    );
 
     res.status(200).json({
       data: rows,
@@ -157,6 +164,38 @@ export const getLowStockCount = async (req, res) => {
 
     const [[{ count }]] = await db.execute(query, params);
     res.status(200).json({ count });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ message: "Database error", error: error.message });
+  }
+};
+
+// GET several low-stock inventory items (optionally filtered by branch)
+export const getLowStockItems = async (req, res) => {
+  try {
+    let query;
+    let params = [];
+    const { branchId, limit = 3 } = req.query;
+    let finalLimit = parseInt(limit);
+    if (isNaN(finalLimit) || finalLimit <= 0) finalLimit = 3;
+
+    if (req.user && req.user.role_id !== 3) {
+      // admin sees only own branch
+      query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+      params = [req.user.branch_id];
+    } else {
+      // superadmin may optionally filter by branchId
+      if (branchId) {
+        query = `SELECT * FROM inventory WHERE branch_id = ? AND quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+        params = [parseInt(branchId)];
+      } else {
+        query = `SELECT * FROM inventory WHERE quantity <= low_stock_threshold ORDER BY quantity ASC LIMIT ${finalLimit}`;
+        params = [];
+      }
+    }
+
+    const [rows] = await db.execute(query, params);
+    res.status(200).json(rows || []);
   } catch (error) {
     console.error("DB ERROR:", error);
     res.status(500).json({ message: "Database error", error: error.message });

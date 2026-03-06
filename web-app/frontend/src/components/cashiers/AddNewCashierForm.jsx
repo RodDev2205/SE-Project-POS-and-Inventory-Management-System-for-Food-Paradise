@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 
 export default function AddNewCashierForm({ onAddCashier }) {
-    const [formData, setFormData] = useState({ full_name: '', username: '', password: '' });
+    const [formData, setFormData] = useState({ 
+        first_name: '', 
+        last_name: '', 
+        username: '', 
+        password: '',
+        contact_number: ''
+    });
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -16,7 +22,7 @@ export default function AddNewCashierForm({ onAddCashier }) {
             lastLogin: 'Never',
         };
         onAddCashier(newCashier);
-        setFormData({ full_name: '', username: '', password: '' });
+        setFormData({ first_name: '', last_name: '', username: '', password: '', contact_number: '' });
     };
 
     return (
@@ -27,9 +33,18 @@ export default function AddNewCashierForm({ onAddCashier }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input 
                     type="text" 
-                    name="full_name" 
-                    placeholder="Full Name" 
-                    value={formData.full_name} 
+                    name="first_name" 
+                    placeholder="First Name" 
+                    value={formData.first_name} 
+                    onChange={handleChange} 
+                    className="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" 
+                    required 
+                />
+                <input 
+                    type="text" 
+                    name="last_name" 
+                    placeholder="Last Name" 
+                    value={formData.last_name} 
                     onChange={handleChange} 
                     className="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" 
                     required 
@@ -51,6 +66,14 @@ export default function AddNewCashierForm({ onAddCashier }) {
                     onChange={handleChange} 
                     className="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" 
                     required 
+                />
+                <input 
+                    type="tel" 
+                    name="contact_number" 
+                    placeholder="Contact Number (Optional)" 
+                    value={formData.contact_number} 
+                    onChange={handleChange} 
+                    className="p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" 
                 />
             </div>
 

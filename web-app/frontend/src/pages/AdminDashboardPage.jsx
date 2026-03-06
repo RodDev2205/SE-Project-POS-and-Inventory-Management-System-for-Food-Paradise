@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -22,7 +23,7 @@ import LogManagement from '../components/LogManagement';
 import POS from '../components/POSadminContent';
 import ChatRoomPage from './ChatRoomPage';  // Example additional page
 import AdminReportPage from './AdminReportPage';  // Example additional page
-
+import AdminSettingsPage from './SettingsPage';  // Example additional page
 import Modal from "../components/POScomponent/Modal/Modal";   // ✅ Reusable Modal Component
 import { useNavigate } from 'react-router-dom';
 
@@ -38,6 +39,23 @@ const PlaceholderPage = ({ title }) => (
 
 function AdminDashboardPage() {
   const [activeItem, setActiveItem] = useState('Dashboard');
+  const location = useLocation();
+
+  // update activeItem whenever the URL path changes
+  React.useEffect(() => {
+    const parts = location.pathname.split('/').filter(Boolean); // ['admin', 'inventory']
+    if (parts.length <= 1) {
+      setActiveItem('Dashboard');
+    } else {
+      const key = parts[1];
+      // convert path segment to title-case name
+      const title = key
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+      setActiveItem(title || 'Dashboard');
+    }
+  }, [location.pathname]);
   
   // ✅ GLOBAL MODAL STATES
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,17 +75,17 @@ function AdminDashboardPage() {
     setModalContent(null);
   };
 
-  // Navigation items
+  // Navigation items (include path for routing)
   const adminNavItems = [
-    { name: 'Dashboard', icon: LayoutDashboard },
-    { name: 'POS', icon: ShoppingCart },
-    { name: 'Menu', icon: BookOpen },
-    { name: 'Inventory', icon: Warehouse },
-    { name: 'Chat Room', icon: MessageCircleMore },  // Example additional item
-    { name: 'Cashiers', icon: Users },
-    { name: 'Reports', icon: ChartNoAxesCombined },  // Example additional item
-    { name: 'Logs', icon: History },
-    { name: 'Settings', icon: Settings },
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
+    { name: 'POS', icon: ShoppingCart, path: '/admin/pos' },
+    { name: 'Chat Room', icon: MessageCircleMore, path: '/admin/chat-room' },
+    { name: 'Menu', icon: BookOpen, path: '/admin/menu' },
+    { name: 'Inventory', icon: Warehouse, path: '/admin/inventory' },
+    { name: 'Cashiers', icon: Users, path: '/admin/cashiers' },
+    { name: 'Reports', icon: ChartNoAxesCombined, path: '/admin/reports' },
+    { name: 'Logs', icon: History, path: '/admin/logs' },
+    { name: 'Settings', icon: Settings, path: '/admin/settings' },
   ];
 
   // Logout Handler
@@ -77,7 +95,7 @@ function AdminDashboardPage() {
     navigate("/login");
   };
 
-  // Render selected page
+  // Render selected page (activeItem is maintained by URL)
   const renderContent = () => {
     switch (activeItem) {
       case 'Dashboard':
@@ -86,7 +104,7 @@ function AdminDashboardPage() {
       case 'Menu':
         return <MenuManagement openModal={openModal} />;
 
-      case 'POS':
+      case 'Pos':
         return <POS openModal={openModal} isAdmin={true} />;   // ⭐ Modal support
 
       case 'Inventory':
@@ -101,7 +119,7 @@ function AdminDashboardPage() {
         return <LogManagement openModal={openModal} />;
 
       case 'Settings':
-        return <PlaceholderPage title="Settings" />;
+        return <AdminSettingsPage openModal={openModal} />;
 
       case 'Logout':
         handleLogout();
@@ -121,7 +139,10 @@ function AdminDashboardPage() {
         logoTitle="Paradise"
         navItems={adminNavItems}
         activeItem={activeItem}
-        setActiveItem={setActiveItem}
+        setActiveItem={(item, path) => {
+          setActiveItem(item);
+          if (path) navigate(path);
+        }}
         onLogout={handleLogout}
       />
 

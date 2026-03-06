@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
+import { useAlert } from "@/context/AlertContext";
 import { X, UserPlus } from "lucide-react";
+import API_BASE_URL from '../../config/api';
 
 export default function EditUserModal({ isOpen, onClose, user, role, onUpdate }) {
   const [branches, setBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const { error: alertError, success } = useAlert();
 
   const [formData, setFormData] = useState({
-    full_name: "",
+    first_name: "",
+    last_name: "",
     username: "",
     password: "",
     branch_id: "",
+    contact_number: "",
   });
 
   /* ================= FETCH BRANCHES ================= */
@@ -22,7 +27,7 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
     const fetchBranches = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/branches/getAll", {
+        const res = await fetch(`${API_BASE_URL}/api/branches/getAll`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Failed to fetch branches");
@@ -48,10 +53,12 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
       "";
 
     setFormData({
-      full_name: user.name || "",
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
       username: user.username || "",
       password: "",
       branch_id: resolvedBranchId,
+      contact_number: user.contact_number || "",
     });
   }, [isOpen, user, branches]);
 
@@ -67,18 +74,19 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
     setErrorMsg("");
 
     try {
-      const { full_name, username, branch_id, password } = formData;
+      const { first_name, last_name, username, branch_id, password, contact_number } = formData;
 
-      if (!full_name || !username || !branch_id) {
-        throw new Error("Full name, username, and branch are required");
+      if (!first_name || !last_name || !username || !branch_id) {
+        throw new Error("First, last name, username, and branch are required");
       }
 
       const token = localStorage.getItem("token");
-      const payload = { full_name, username, branch_id };
+      const payload = { first_name, last_name, username, branch_id };
       if (password) payload.password = password;
+      if (contact_number) payload.contact_number = contact_number;
 
       const userId = user.id || user.user_id;
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/users/user/${userId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/user/${userId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -98,6 +106,7 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
       onClose();
     } catch (err) {
       setErrorMsg(err.message);
+      alertError("Error", err.message);
     } finally {
       setLoadingSubmit(false);
     }
@@ -121,16 +130,29 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
         <form onSubmit={handleSubmit} className="space-y-4">
           {errorMsg && <p className="text-sm text-red-500">{errorMsg}</p>}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Full Name</label>
-            <input
-              type="text"
-              name="full_name"
-              value={formData.full_name}
-              onChange={handleChange}
-              required
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">First Name</label>
+              <input
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                required
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Last Name</label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleChange}
+                required
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+              />
+            </div>
           </div>
 
           <div>
@@ -157,6 +179,17 @@ export default function EditUserModal({ isOpen, onClose, user, role, onUpdate })
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Contact Number</label>
+            <input
+              type="text"
+              name="contact_number"
+              value={formData.contact_number}
+              onChange={handleChange}
+              placeholder="(optional)"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Branch</label>
             <select

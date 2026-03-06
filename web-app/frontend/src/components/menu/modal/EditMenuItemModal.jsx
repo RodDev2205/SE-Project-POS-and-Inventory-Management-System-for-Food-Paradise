@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import API_BASE_URL from '../../../config/api';
 
 export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, categories = [], declined = false }) {
   const [modalStep, setModalStep] = useState(1);
@@ -25,7 +26,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
   const [hasMore, setHasMore] = useState(true);
   const [loadingIngredients, setLoadingIngredients] = useState(false);
 
-  const API_INVENTORY = "https://deployment-backend-repo-production.up.railway.app/api/inventory";
+  const API_INVENTORY = `${API_BASE_URL}/api/inventory`;
 
   const productNameRef = useRef(null);
 
@@ -42,7 +43,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
         ingredients: [],
         file: null,
       }));
-      setFilePreview(item.image_path ? `https://deployment-backend-repo-production.up.railway.app${item.image_path}` : null);
+      setFilePreview(item.image_path ? `${API_BASE_URL}${item.image_path}` : null);
       // fetch existing linked ingredients
       fetchLinkedIngredients(item.product_id);
     }
@@ -84,7 +85,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
   const fetchLinkedIngredients = async (productId) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/menu/${productId}/inventory`, {
+      const res = await fetch(`${API_BASE_URL}/api/menu/${productId}/inventory`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return;
@@ -144,7 +145,7 @@ export default function EditMenuItemModal({ isOpen, onClose, onSaved, item, cate
       if (newItem.menu_status) form.append("menu_status", newItem.menu_status);
       form.append("ingredients", JSON.stringify(newItem.ingredients));
 
-      const endpoint = declined ? `https://deployment-backend-repo-production.up.railway.app/api/menu/declined/${item.product_id}` : `https://deployment-backend-repo-production.up.railway.app/api/menu/${item.product_id}`;
+      const endpoint = declined ? `${API_BASE_URL}/api/menu/declined/${item.product_id}` : `${API_BASE_URL}/api/menu/${item.product_id}`;
       const res = await fetch(endpoint, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },

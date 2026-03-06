@@ -1,10 +1,12 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Platform,
   StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -20,6 +22,7 @@ export default function InventoryStatusScreen() {
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [branches, setBranches] = useState([]);
   const [branchDropdownVisible, setBranchDropdownVisible] = useState(false);
+  const [outOfStockItems, setOutOfStockItems] = useState([]);
   const [lowStockItems, setLowStockItems] = useState([]);
   const [otherItems, setOtherItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,9 +77,15 @@ export default function InventoryStatusScreen() {
         items = await res.json();
       }
 
-      // split low stock vs others by quantity vs low_stock_threshold
-      const low = items.filter((it) => Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0));
-      const others = items.filter((it) => !(Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0)));
+      // categorize inventory
+      const out = items.filter((it) => Number(it.quantity || 0) === 0);
+      const low = items.filter(
+        (it) => Number(it.quantity || 0) > 0 && Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0)
+      );
+      const others = items.filter(
+        (it) => Number(it.quantity || 0) > 0 && Number(it.quantity || 0) > Number(it.low_stock_threshold || 0)
+      );
+      setOutOfStockItems(out);
       setLowStockItems(low);
       setOtherItems(others);
     } catch (err) {
@@ -248,6 +257,29 @@ export default function InventoryStatusScreen() {
           )}
         </View>
 
+        {/* Out‑of‑Stock Items section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.iconCircleRed}>
+              <Ionicons name="close-circle" size={16} color="#fff" />
+            </View>
+            <Text style={styles.sectionTitle}>Out of Stock Items</Text>
+          </View>
+
+          {loading ? (
+            <Text style={{ color: '#666' }}>Loading...</Text>
+          ) : outOfStockItems.length === 0 ? (
+            <Text style={{ color: '#666' }}>No out‑of‑stock items</Text>
+          ) : (
+            outOfStockItems.map((item) => (
+              <View key={item.inventory_id} style={styles.itemRow}>
+                <Text style={styles.itemName}>{item.item_name}</Text>
+                <Text style={styles.itemStatus}>Qty: {item.quantity}</Text>
+              </View>
+            ))
+          )}
+        </View>
+
         {/* Low Stock Items section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -368,8 +400,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 1,
     paddingRight: 16,
-    paddingTop: 12,
-    paddingBottom: 2,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+    paddingBottom: 7,
     minHeight: 72,
   },
   logoWrap: {

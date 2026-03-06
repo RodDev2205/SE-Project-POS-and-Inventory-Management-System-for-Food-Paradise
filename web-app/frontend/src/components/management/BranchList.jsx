@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import API_BASE_URL from '../../config/api';
 import { Store } from "lucide-react";
 import AddBranchModal from "./AddBranches";
 import ViewBranchModal from "./ViewBranchModal";
@@ -18,12 +19,9 @@ export default function BranchList() {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(
-        "https://deployment-backend-repo-production.up.railway.app/api/branches/getBranches",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/api/branches/getBranches`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch branches");

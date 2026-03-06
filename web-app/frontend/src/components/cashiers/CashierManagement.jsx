@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../config/api';
 import CashierCard from "./CashierCard";
 import AddNewCashierForm from "./AddNewCashierForm";
 import EditCashierModal from "./EditCashierModal";
@@ -6,6 +8,7 @@ import ResetPasswordModal from "./ResetPasswordModal";
 
 export default function CashierManagement() {
   const [cashiers, setCashiers] = useState([]);
+  const { error: alertError, success } = useAlert();
   const [editingCashier, setEditingCashier] = useState(null);
   const [resettingCashier, setResettingCashier] = useState(null);
 
@@ -21,7 +24,7 @@ export default function CashierManagement() {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers", {
+      const res = await fetch(`${API_BASE_URL}/api/admin/cashiers`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -37,7 +40,7 @@ export default function CashierManagement() {
   const handleAddCashier = async (newCashier) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers", {
+      const res = await fetch(`${API_BASE_URL}/api/admin/cashiers`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(newCashier),
@@ -50,14 +53,14 @@ export default function CashierManagement() {
       triggerNotification("Cashier added successfully!");
     } catch (err) {
       console.error("Error adding cashier:", err);
-      alert(err.message);
+      alertError("Error", err.message);
     }
   };
 
   const handleToggleStatus = async (id) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/toggle/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/toggle/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
@@ -71,19 +74,21 @@ export default function CashierManagement() {
       triggerNotification("Status updated successfully!");
     } catch (err) {
       console.error("Failed to toggle status:", err);
-      alert(err.message);
+      alertError("Error", err.message);
     }
   };
 
   const handleSaveEdit = async (updatedCashier) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers/${updatedCashier.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/cashiers/${updatedCashier.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          full_name: updatedCashier.full_name,
+          first_name: updatedCashier.first_name,
+          last_name: updatedCashier.last_name,
           username: updatedCashier.username,
+          contact_number: updatedCashier.contact_number,
         }),
       });
 
@@ -93,7 +98,7 @@ export default function CashierManagement() {
       setCashiers(prev =>
         prev.map(c =>
           c.id === updatedCashier.id
-            ? { ...c, full_name: updatedCashier.full_name, username: updatedCashier.username }
+            ? { ...c, first_name: updatedCashier.first_name, last_name: updatedCashier.last_name, username: updatedCashier.username, contact_number: updatedCashier.contact_number }
             : c
         )
       );
@@ -101,7 +106,7 @@ export default function CashierManagement() {
       triggerNotification("Cashier updated successfully!");
     } catch (err) {
       console.error("Failed to update cashier:", err);
-      alert(err.message);
+      alertError("Error", err.message);
     }
   };
 
@@ -109,7 +114,7 @@ export default function CashierManagement() {
   const handleUpdatePassword = async (cashierId, password) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`https://deployment-backend-repo-production.up.railway.app/api/admin/cashiers/${cashierId}/password`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/cashiers/${cashierId}/password`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ password }),
@@ -122,7 +127,7 @@ export default function CashierManagement() {
       triggerNotification("Password updated successfully!");
     } catch (err) {
       console.error("Failed to update password:", err);
-      alert(err.message);
+      alertError("Error", err.message);
     }
   };
 

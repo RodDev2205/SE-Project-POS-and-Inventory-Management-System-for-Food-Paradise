@@ -1,17 +1,19 @@
 // EditIngredientModal.jsx
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { useAlert } from "@/context/AlertContext";
+import API_BASE_URL from '../../../config/api';
 
 const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
+  const { error: alertError, success } = useAlert();
   const [form, setForm] = useState({
     item_name: "",
     quantity: 1,
     servings_per_unit: 1,
     low_stock_threshold: 5,
-    status: "active",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [calculatedStatus, setCalculatedStatus] = useState("available");
 
   // Pre-fill form when modal opens or ingredient changes
   useEffect(() => {
@@ -21,10 +23,22 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
         quantity: ingredient.quantity || 1,
         servings_per_unit: ingredient.servings_per_unit || 1,
         low_stock_threshold: ingredient.low_stock_threshold || 5,
-        status: ingredient.status || "active",
       });
+      // Calculate what status will be based on quantity
+      calculateStatus(ingredient.quantity, ingredient.low_stock_threshold);
     }
   }, [ingredient]);
+
+  // Calculate status whenever quantity or threshold changes
+  const calculateStatus = (qty, threshold) => {
+    if (Number(qty) === 0) {
+      setCalculatedStatus("out_of_stock");
+    } else if (Number(qty) <= Number(threshold)) {
+      setCalculatedStatus("low_stock");
+    } else {
+      setCalculatedStatus("available");
+    }
+  };
 
   // Lock scroll when modal is open
   useEffect(() => {
@@ -38,15 +52,23 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    const numValue = name === "item_name" ? value : Number(value);
+    
     setForm((prev) => ({
       ...prev,
-      [name]: name === "item_name" || name === "status" ? value : Number(value),
+      [name]: numValue,
     }));
+
+    // Recalculate status when quantity or threshold changes
+    if (name === "quantity" || name === "low_stock_threshold") {
+      const newQty = name === "quantity" ? Number(value) : form.quantity;
+      const newThreshold = name === "low_stock_threshold" ? Number(value) : form.low_stock_threshold;
+      calculateStatus(newQty, newThreshold);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -54,7 +76,7 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
       if (!token) throw new Error("You must be logged in");
 
       const response = await fetch(
-        `https://deployment-backend-repo-production.up.railway.app/api/inventory/edit-ingredient/${ingredient.inventory_id}`,
+        `${API_BASE_URL}/api/inventory/edit-ingredient/${ingredient.inventory_id}`,
         {
           method: "PUT",
           headers: {
@@ -70,27 +92,22 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
         throw new Error(data.message || `Failed to update ingredient (${response.status})`);
       }
 
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.warn("Response parsing issue:", e);
-      }
-
       // Notify parent about edit
       if (onEdit) {
         onEdit({
           ...ingredient,
           ...form,
+          status: calculatedStatus,
           total_servings: form.quantity * form.servings_per_unit,
         });
       }
 
-      setLoading(false);
+      success("Success", "Ingredient updated successfully ✅");
       onClose();
     } catch (err) {
       console.error("Submission error:", err);
-      setError(err.message);
+      alertError("Error", err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -116,12 +133,6 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
           Edit Ingredient
         </h2>
 
-        {error && (
-          <div className="mb-3 text-sm text-red-600 bg-red-100 p-2 rounded-xl">
-            {error}
-          </div>
-        )}
-
         <form className="space-y-4" onSubmit={handleSubmit}>
           {/* Ingredient Name */}
           <div>
@@ -142,7 +153,7 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
             <input
               type="number"
               name="quantity"
-              min="1"
+              min="0"
               value={form.quantity}
               onChange={handleChange}
               required
@@ -178,18 +189,29 @@ const EditIngredientModal = ({ isOpen, onClose, ingredient, onEdit }) => {
             />
           </div>
 
-          {/* Status */}
+          {/* Status Display (Read-only, auto-calculated) */}
           <div>
-            <label className="text-sm text-gray-600">Status</label>
-            <select
-              name="status"
-              value={form.status}
-              onChange={handleChange}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-green-500 focus:outline-none"
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+            <label className="text-sm text-gray-600">Status (Auto-calculated)</label>
+            <div className="w-full px-4 py-2.5 border border-gray-200 rounded-2xl bg-gray-50 flex items-center">
+              <span
+                className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                  calculatedStatus === "available"
+                    ? "bg-green-100 text-green-700"
+                    : calculatedStatus === "low_stock"
+                    ? "bg-yellow-100 text-yellow-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {calculatedStatus === "available"
+                  ? "Available"
+                  : calculatedStatus === "low_stock"
+                  ? "Low Stock"
+                  : "Out of Stock"}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Status is automatically determined by quantity vs. threshold
+            </p>
           </div>
 
           <button

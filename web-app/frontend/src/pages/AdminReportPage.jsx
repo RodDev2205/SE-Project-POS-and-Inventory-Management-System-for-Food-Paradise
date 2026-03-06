@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Download } from "lucide-react";
+import API_BASE_URL from '../config/api';
 import {
   LineChart,
   Line,
@@ -57,14 +58,14 @@ export default function AdminReportsPage() {
 
         const [salesRes, todayRes, paymentRes] = await Promise.all([
           fetch(
-            `https://deployment-backend-repo-production.up.railway.app/api/sales-admin/sales?period=${period}&startDate=${startDate}&endDate=${endDate}`,
+            `${API_BASE_URL}/api/sales-admin/sales?period=${period}&startDate=${startDate}&endDate=${endDate}`,
             { headers: { Authorization: `Bearer ${token}` } }
           ),
-          fetch("https://deployment-backend-repo-production.up.railway.app/api/sales-admin/today-sales", {
+          fetch(`${API_BASE_URL}/api/sales-admin/today-sales`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(
-            `https://deployment-backend-repo-production.up.railway.app/api/sales-admin/payment-methods?startDate=${startDate}&endDate=${endDate}`,
+            `${API_BASE_URL}/api/sales-admin/payment-methods?startDate=${startDate}&endDate=${endDate}`,
             { headers: { Authorization: `Bearer ${token}` } }
           ),
         ]);
@@ -77,7 +78,7 @@ export default function AdminReportsPage() {
         const todayData = await todayRes.json();
         const payData = await paymentRes.json();
         const topData = await fetch(
-          `https://deployment-backend-repo-production.up.railway.app/api/sales-admin/top-products?startDate=${startDate}&endDate=${endDate}`,
+          `${API_BASE_URL}/api/sales-admin/top-products?startDate=${startDate}&endDate=${endDate}`,
           { headers: { Authorization: `Bearer ${token}` } }
         ).then(r => r.ok ? r.json() : []);
 
