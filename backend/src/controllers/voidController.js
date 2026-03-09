@@ -1,10 +1,30 @@
 import { db } from "../config/db.js";
 
+// Helper function to log POS activities
+async function logPOSActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    console.log(`📝 Attempting to log POS activity: ${activityType} for user ${userId}`);
+    const result = await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, reference_id, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, referenceId, description]
+    );
+    console.log(`✅ Logged POS activity: ${activityType}, inserted ID:`, result[0]?.insertId);
+  } catch (err) {
+    console.error('❌ Failed to log POS activity:', err);
+    console.error('Activity details:', { userId, branchId, activityType, description, referenceId });
+    // Don't throw - just log the error. The main operation should still succeed
+  }
+}
+
 // record a void request and update transaction status
 export const voidTransaction = async (req, res) => {
   const { transaction_id, reason, admin_pin, void_items } = req.body;
   const cashier_id = req.user.user_id;
   const branch_id = req.user.branch_id;
+
+  console.log("Void request received:", { transaction_id, reason, admin_pin: admin_pin ? "***" : null, void_items, cashier_id, branch_id });
 
   if (!transaction_id || !reason || !admin_pin) {
     return res.status(400).json({ message: "transaction_id, reason and admin_pin are required" });
@@ -20,6 +40,8 @@ export const voidTransaction = async (req, res) => {
        WHERE pin_code = ? AND role_id IN (2,3) AND status = 'Activate'`,
       [admin_pin]
     );
+
+    console.log("Admin lookup result:", admin ? "Found admin" : "No admin found");
 
     if (!admin) {
       await connection.rollback();
@@ -40,8 +62,9 @@ export const voidTransaction = async (req, res) => {
     );
 
     // determine whether full or partial void
+    const isPartialVoid = void_items && Object.keys(void_items).length > 0;
     let itemsToVoid = [];
-    if (void_items && Object.keys(void_items).length > 0) {
+    if (isPartialVoid) {
       // partial: object mapping menu_id->qty
       itemsToVoid = allItems.map(it => ({
         ...it,
@@ -52,7 +75,10 @@ export const voidTransaction = async (req, res) => {
       itemsToVoid = allItems.map(it => ({ ...it, void_qty: it.quantity }));
     }
 
-    // restore inventory and decrement transaction_items quantities
+    console.log("allItems:", allItems);
+    console.log("itemsToVoid:", itemsToVoid);
+
+    // restore inventory and update transaction_items: mark voided items as void, decrement quantities
     for (const item of itemsToVoid) {
       const [ingredients] = await connection.query(
         `SELECT inventory_id, servings_required FROM menu_inventory WHERE product_id = ?`,
@@ -65,31 +91,63 @@ export const voidTransaction = async (req, res) => {
           [restoreAmount, ing.inventory_id]
         );
       }
-      // subtract voided quantity from transaction_items
+      
+      // For voided items: deduct quantity AND increment voided_quantity for tracking
       await connection.query(
         `UPDATE transaction_items
-         SET quantity = GREATEST(0, quantity - ?)
+         SET quantity = GREATEST(0, quantity - ?), voided_quantity = voided_quantity + ?
          WHERE transaction_id = ? AND menu_id = ?`,
-        [item.void_qty, transaction_id, item.menu_id]
+        [item.void_qty, item.void_qty, transaction_id, item.menu_id]
       );
     }
 
-    // update transaction status appropriately
-    let newStatus;
-    if (!void_items || Object.keys(void_items).length === 0) {
-      newStatus = 'Voided';
-    } else {
-      // check if all items fully voided
-      const remaining = itemsToVoid.reduce((sum, it) => sum + (it.quantity - it.void_qty), 0);
-      newStatus = remaining === 0 ? 'Voided' : 'Partial Voided';
-    }
+    // Update transaction total_amount to reflect voided items
+    const [currentTotal] = await connection.query(
+      `SELECT SUM((quantity + voided_quantity) * price) as original_total,
+              SUM(quantity * price) as current_total
+       FROM transaction_items WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+    
+    const voidedAmount = (currentTotal[0].original_total || 0) - (currentTotal[0].current_total || 0);
+    
+    // Update transaction total_amount
+    await connection.query(
+      `UPDATE transactions SET total_amount = total_amount - ? WHERE transaction_id = ?`,
+      [voidedAmount, transaction_id]
+    );
+
+    // Check if transaction is fully voided (all items have quantity = 0)
+    const [[{totalRemaining}]] = await connection.query(
+      `SELECT COALESCE(SUM(quantity), 0) as totalRemaining FROM transaction_items WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+    const newStatus = isPartialVoid ? (totalRemaining === 0 ? 'Voided' : 'Partial Voided') : 'Voided';
 
     await connection.query(
       `UPDATE transactions SET status = ? WHERE transaction_id = ?`,
       [newStatus, transaction_id]
     );
 
+    console.log("Updated status to:", newStatus);
+
     await connection.commit();
+
+    // Get transaction number for logging
+    const [[transaction]] = await db.query(
+      `SELECT transaction_number FROM transactions WHERE transaction_id = ?`,
+      [transaction_id]
+    );
+
+    // Log the void transaction
+    await logPOSActivity({
+      userId: cashier_id,
+      branchId: branch_id,
+      activityType: isPartialVoid ? 'transaction_partial_void' : 'transaction_voided',
+      description: `${isPartialVoid ? 'Partially' : 'Fully'} voided transaction ${transaction.transaction_number} - Reason: ${reason}`,
+      referenceId: transaction_id
+    });
+
     res.json({ success: true, void_id: result.insertId, status: newStatus });
   } catch (error) {
     await connection.rollback();

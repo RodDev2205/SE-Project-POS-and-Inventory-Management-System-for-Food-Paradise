@@ -17,20 +17,34 @@ export default function Records () {
     const [detailLoading, setDetailLoading] = useState(false);
     const { error } = useAlert();
 
-    useEffect(() => {
+    const fetchTransactions = async () => {
         const token = localStorage.getItem("token");
-        fetch(`${API_BASE_URL}/api/pos/user-transactions`, {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then(res => res.json())
-            .then(data => {
-                setRecords(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error("Failed to fetch transactions", err);
-                setLoading(false);
+        if (!token) {
+            console.error("No auth token found");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/pos/user-transactions`, {
+                headers: { Authorization: `Bearer ${token}` },
             });
+
+            if (!res.ok) {
+                console.error("Failed to fetch transactions:", res.status, res.statusText);
+                return;
+            }
+
+            const data = await res.json();
+            console.log("Fetched transactions:", data.length);
+            setRecords(data);
+        } catch (err) {
+            console.error("Failed to fetch transactions", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchTransactions();
+        setLoading(false);
     }, []);
 
     const formatTime = isoString => {
@@ -92,10 +106,13 @@ export default function Records () {
     };
 
     // filter + pagination
-    const filtered = records.filter(r =>
-        r.transaction_number.toLowerCase().includes(search.toLowerCase()) ||
-        formatTime(r.created_at).includes(search)
-    );
+    const filtered = records.filter(r => {
+        const txnNum = r.transaction_number ? r.transaction_number.toLowerCase() : "";
+        return (
+            txnNum.includes(search.toLowerCase()) ||
+            formatTime(r.created_at).includes(search)
+        );
+    });
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
     const start = (page - 1) * ITEMS_PER_PAGE;
     const currentRecords = filtered.slice(start, start + ITEMS_PER_PAGE);
@@ -140,9 +157,17 @@ export default function Records () {
                                 <td className="px-4 py-3">₱ {Number(record.total_amount).toFixed(2)}</td>
                                 <td className="px-4 py-3">₱ {Number(record.amount_paid).toFixed(2)}</td>
                                 <td className="px-4 py-3 capitalize">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${record.status === 'completed' ? 'bg-green-100 text-green-800' : record.status === 'voided' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                        {record.status}
-                                    </span>
+                                    {(() => {
+                                        const statusLower = record.status ? record.status.toLowerCase() : '';
+                                        let bgClass = 'bg-yellow-100 text-yellow-800';
+                                        if (statusLower === 'completed') bgClass = 'bg-green-100 text-green-800';
+                                        else if (statusLower === 'voided' || statusLower === 'partial voided') bgClass = 'bg-red-100 text-red-800';
+                                        return (
+                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${bgClass}`}>
+                                                {record.status || 'Unknown'}
+                                            </span>
+                                        );
+                                    })()}
                                 </td>
                                 <td className="px-4 py-3 flex gap-2">
                                     <button
@@ -204,12 +229,10 @@ export default function Records () {
                         data={modalData}
                         onClose={() => setIsModalOpen(false)}
                         onVoid={(txId, status) => {
-                            // use server-confirmed status when updating
-                            setRecords(prev =>
-                                prev.map(r =>
-                                    r.transaction_id === txId ? { ...r, status: status || 'Voided' } : r
-                                )
-                            );
+                            // Refresh data from server after a short delay to ensure void operation completes
+                            setTimeout(() => {
+                                fetchTransactions();
+                            }, 500);
                             if (modalData && modalData.transaction.transaction_id === txId) {
                                 setModalData({
                                     ...modalData,
@@ -218,12 +241,8 @@ export default function Records () {
                             }
                         }}
                         onRefund={(txId, status) => {
-                            // use server-confirmed status when updating
-                            setRecords(prev =>
-                                prev.map(r =>
-                                    r.transaction_id === txId ? { ...r, status: status || 'Refunded' } : r
-                                )
-                            );
+                            // Refresh data from server to ensure we have the latest status
+                            fetchTransactions();
                             if (modalData && modalData.transaction.transaction_id === txId) {
                                 setModalData({
                                     ...modalData,

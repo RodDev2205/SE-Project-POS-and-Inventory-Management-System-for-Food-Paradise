@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import logo from '../assets/logo3.png';
 import API_BASE_URL from '../config/api';
 
 export default function Login() {
@@ -78,7 +79,7 @@ export default function Login() {
   return (
     <div className="w-full min-h-screen flex">
       {/* Left Info Panel */}
-      <div className="w-1/2 bg-emerald-700 text-white flex flex-col items-center justify-center p-12 relative rounded-r-2xl">
+      <div className="w-1/2 bg-green-800 text-white flex flex-col items-center justify-center p-12 relative rounded-r-2xl">
         <div className="text-center space-y-6">
           <h1 className="text-3xl font-bold">Point of Sale</h1>
           <div className="w-2 h-2 bg-white rounded-full mx-auto"></div>
@@ -97,45 +98,51 @@ export default function Login() {
       {/* Right Login Panel */}
       <div className="w-1/2 bg-gray-100 flex flex-col items-center justify-center p-12">
         <div className="w-full max-w-sm">
-          <div className="w-32 h-32 bg-gray-300 rounded-full mx-auto mb-6 flex items-center justify-center">
-            <User className="w-16 h-16 text-gray-500" />
-          </div>
-
-          <h2 className="text-center text-3xl font-bold mb-4 text-gray-800">Food Paradise</h2>
-          <h3 className="text-center text-lg font-bold mb-8 text-gray-600">Employee Login</h3>
-
+          {logo ? (
+            <img src={logo} alt="Profile" className="w-90 h-auto mx-auto mb-3" />
+          ) : (
+            <User className="w-20 h-20 text-gray-500 mx-auto mb-6" />
+          )}
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                disabled={loading}
-              />
+            <div>
+              <label htmlFor="username" className="block text-md font-medium text-gray-700 mb-1">Username:</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                <input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                  disabled={loading}
+                />
+              </div>
             </div>
 
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                disabled={loading}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 p-1"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                disabled={loading}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+            <div>
+              <label htmlFor="password" className="block text-md font-medium text-gray-700 mb-1">Password:</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 p-1"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={loading}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -155,7 +162,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-emerald-700 text-white font-semibold rounded hover:bg-emerald-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-green-800 text-white font-semibold rounded hover:bg-emerald-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {loading ? 'LOGGING IN...' : 'LOGIN'}
             </button>

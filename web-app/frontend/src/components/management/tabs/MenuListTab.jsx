@@ -99,9 +99,10 @@ export default function MenuListTab() {
       .toLowerCase()
       .includes(search.toLowerCase());
 
+    const statusLower = item.approval_status ? item.approval_status.toLowerCase() : "";
     const matchesStatus =
       statusFilter === "all" ||
-      item.approval_status?.toLowerCase() === statusFilter;
+      statusLower === statusFilter;
 
     return matchesSearch && matchesStatus;
   });

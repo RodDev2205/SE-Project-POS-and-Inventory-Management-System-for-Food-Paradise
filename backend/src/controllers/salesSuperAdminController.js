@@ -55,13 +55,38 @@ export async function getKpis(req, res) {
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
-    // 1) Total sales (filtered by branch if selected)
+    // 1) Total sales (filtered by branch if selected) - NET SALES (only completed)
     const [totalRows] = await db.execute(
       `SELECT COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales 
        FROM transactions t 
        LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
        WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
       params
+    );
+
+    // 1.5) Gross sales (filtered by branch/date if selected) - ALL SALES (including voided/refunded)
+    const grossWhereClause = branchId && branchId !== 'all'
+      ? `t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
+      : `t.created_at BETWEEN ? AND ?`;
+    const grossParams = branchId && branchId !== 'all'
+      ? [startSql, endSql, parseInt(branchId)]
+      : [startSql, endSql];
+
+    const [grossRows] = await db.execute(
+      `SELECT COALESCE(SUM((ti.quantity + ti.voided_quantity) * ti.price), 0) AS gross_sales 
+       FROM transactions t 
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+       WHERE ${grossWhereClause}`,
+      grossParams
+    );
+
+    // 1.6) Voided sales (filtered by branch/date if selected) - VALUE OF VOIDED PORTIONS
+    const [voidedRows] = await db.execute(
+      `SELECT COALESCE(SUM(ti.voided_quantity * ti.price), 0) AS voided_sales 
+       FROM transactions t 
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+       WHERE ${grossWhereClause}`,
+      grossParams
     );
 
     // 2) Total transactions (filtered by branch if selected)
@@ -83,31 +108,20 @@ export async function getKpis(req, res) {
       statusParams
     );
 
-    // 4) Average order value (filtered by branch if selected)
-    const [avgRows] = await db.execute(
-      `SELECT AVG(net_total) AS avg_order_value 
-       FROM (
-         SELECT t.transaction_id, COALESCE(SUM(ti.quantity * ti.price), 0) as net_total 
-         FROM transactions t 
-         LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-         WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')} 
-         GROUP BY t.transaction_id
-       ) as sub`,
-      params
-    );
-
     // 4) Active branches (ALWAYS unfiltered - shows all branches with activity)
     const [branchRows] = await db.execute(
       `SELECT COUNT(DISTINCT t.branch_id) AS active_branches FROM transactions t WHERE t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`,
       [startSql, endSql]
     );
 
-    const totalSales = Number(totalRows[0].total_sales || 0);
+    const grossSales = Number(grossRows[0].gross_sales || 0);
+    const voidedSales = Number(voidedRows[0].voided_sales || 0);
+    const netSales = grossSales - voidedSales;
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
     const voided = statusRows[0]?.voided_count || 0;
-    const avgOrderValue = Number(avgRows[0].avg_order_value || 0);
+    const avgOrderValue = transactionCount > 0 ? Number((netSales / transactionCount).toFixed(2)) : 0;
     const activeBranches = Number(branchRows[0].active_branches || 0);
 
     // compute average transactions per day
@@ -120,12 +134,14 @@ export async function getKpis(req, res) {
     const monthToDateDays = Math.floor((now - startOfMonth) / msPerDay) + 1;
 
     return res.json({
-      total_sales: totalSales,
+      gross_sales: grossSales,
+      voided_sales: voidedSales,
+      total_sales: netSales,
       transaction_count: transactionCount,
       partial_refunded_count: partialRefunded,
       refunded_count: refunded,
       voided_count: voided,
-      avg_order_value: Number(avgOrderValue.toFixed(2)),
+      avg_order_value: avgOrderValue,
       active_branches: activeBranches,
       avg_transactions_per_day: Number(avgTransactionsPerDay.toFixed(2)),
       month_to_date_days: monthToDateDays,
@@ -138,9 +154,70 @@ export async function getKpis(req, res) {
   }
 }
 
+export async function getVoidTransactions(req, res) {
+  try {
+    const { startDate, endDate, branchId } = req.query;
+
+    // Default to month-to-date
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultEnd = now;
+
+    const parseDate = (d) => {
+      if (!d) return null;
+      return new Date(d + 'T00:00:00');
+    };
+
+    const start = startDate ? parseDate(startDate) : defaultStart;
+    const end = endDate ? parseDate(endDate) : defaultEnd;
+
+    const startSql = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')} 00:00:00`;
+    const endSql = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')} 23:59:59`;
+
+    let query = `
+      SELECT
+        t.transaction_id,
+        t.transaction_number,
+        t.status,
+        t.created_at,
+        t.cashier_id,
+        u.Username as cashier_name,
+        b.branch_name,
+        COALESCE(SUM(ti.voided_quantity * ti.price), 0) as void_amount
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
+      LEFT JOIN users u ON t.cashier_id = u.user_id
+      LEFT JOIN branches b ON t.branch_id = b.branch_id
+      WHERE t.status IN ('Voided', 'Partial Refunded', 'Partial Voided')
+        AND t.created_at BETWEEN ? AND ?
+    `;
+
+    const params = [startSql, endSql];
+
+    // Filter by branch if specified
+    if (branchId && branchId !== 'all') {
+      query += ` AND t.branch_id = ?`;
+      params.push(parseInt(branchId));
+    }
+
+    query += `
+      GROUP BY t.transaction_id, t.status, t.created_at, t.cashier_id, u.Username, b.branch_name
+      ORDER BY t.created_at DESC
+    `;
+
+    const [rows] = await db.execute(query, params);
+
+    return res.json(rows || []);
+  } catch (err) {
+    console.error('getVoidTransactions error', err);
+    return res.status(500).json({ message: 'Failed to fetch void transactions', error: err.message });
+  }
+}
+
 export default {
   getKpis,
   getBranches,
+  getVoidTransactions,
 };
 
 export async function getBranches(req, res) {

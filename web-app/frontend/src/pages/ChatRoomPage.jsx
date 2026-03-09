@@ -13,6 +13,7 @@ export default function ChatRoom() {
   const [attachmentName, setAttachmentName] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -206,7 +207,7 @@ export default function ChatRoom() {
         {/* Chat Area */}
         <div className="flex flex-col flex-1 bg-white rounded-xl shadow-sm min-h-0 overflow-hidden">
           {/* Header */}
-          <header className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 flex-shrink-0">
+          <header className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-green-700 to-green-800 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="bg-white/20 text-white w-10 h-10 rounded-lg flex items-center justify-center">
                 <Users className="w-5 h-5" />
@@ -220,9 +221,6 @@ export default function ChatRoom() {
                 </p>
               </div>
             </div>
-            <button className="p-2 text-white hover:bg-white/20 rounded-lg transition">
-              <LogOut className="w-5 h-5" />
-            </button>
           </header>
 
           {/* Messages Area */}
@@ -242,12 +240,12 @@ export default function ChatRoom() {
                     <div
                       className={`max-w-xs rounded-lg px-4 py-2.5 ${
                         isCurrentUser
-                          ? "bg-emerald-600 text-white"
+                          ? "bg-green-800 text-white"
                           : "bg-white text-gray-800 border border-gray-200"
                       }`}
                     >
                       {!isCurrentUser && (
-                        <p className="text-xs font-medium mb-1 text-emerald-700">
+                        <p className="text-xs font-medium mb-1 text-green-800">
                           {msg.full_name || msg.username || "Unknown"}
                         </p>
                       )}
@@ -258,7 +256,7 @@ export default function ChatRoom() {
                           src={`${API_BASE_URL}${msg.attachment_url}`}
                           alt="attachment"
                           className="mt-2 max-w-xs rounded cursor-pointer"
-                          onClick={() => window.open(`${API_BASE_URL}${msg.attachment_url}`, '_blank')}
+                          onClick={() => setSelectedImage(`${API_BASE_URL}${msg.attachment_url}`)}
                         />
                       )}
                       {msg.attachment_url && msg.message_type === 'file' && (
@@ -310,7 +308,7 @@ export default function ChatRoom() {
               <button
                 type="submit"
                 disabled={(!message.trim() && !file) || !activeBranchId}
-                className="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -320,9 +318,9 @@ export default function ChatRoom() {
 
         {/* Sidebar - Branch List */}
         <div className="w-80 flex flex-col bg-white rounded-xl shadow-sm min-h-0 overflow-hidden">
-          <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4 flex-shrink-0">
+          <div className="bg-gradient-to-r from-green-700 to-green-800 px-6 py-4 flex-shrink-0">
             <h2 className="text-lg font-semibold text-white">Branch Chats</h2>
-            <p className="text-xs text-emerald-100">
+            <p className="text-xs text-green-100">
               {isLoading ? "Loading..." : `${branches.length} branch${branches.length !== 1 ? "es" : ""}`}
             </p>
           </div>
@@ -339,12 +337,12 @@ export default function ChatRoom() {
                   <button
                     key={branch.branch_id}
                     onClick={() => setActiveBranchId(branch.branch_id)}
-                    className={`w-full px-4 py-3 border-b text-left hover:bg-emerald-50 transition ${
-                      isActive ? "bg-emerald-50 border-l-4 border-l-emerald-600" : ""
+                    className={`w-full px-4 py-3 border-b text-left hover:bg-green-50 transition ${
+                      isActive ? "bg-green-50 border-l-4 border-l-green-700" : ""
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                      <div className="w-9 h-9 bg-green-100 text-green-800 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0">
                         {branch.branch_name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -373,6 +371,25 @@ export default function ChatRoom() {
           </div>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50" onClick={() => setSelectedImage(null)}>
+          <div className="relative w-full h-full flex items-center justify-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={selectedImage}
+              alt="Full size"
+              className="max-w-[95vw] max-h-[95vh] object-contain"
+            />
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 text-white text-2xl hover:text-gray-300 transition-colors"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,10 +8,12 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
+import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
 import { NotificationContext } from '@/context/NotificationContext';
 import { io as ioclient } from 'socket.io-client';
@@ -27,12 +29,52 @@ export default function InventoryStatusScreen() {
   const [otherItems, setOtherItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const socketRef = useRef(null);
   const selectedBranchRef = useRef(null);
-  const { notifications, toggleNotificationRead, unreadCount, auth, addNotification, handleNotificationClick } = useContext(NotificationContext);
+  const { notifications, toggleNotificationRead, unreadCount, auth, addNotification, handleNotificationClick, logout } = useContext(NotificationContext);
 
   const handleNotifications = () => {
-    setNotificationsVisible(true);
+    setShowSettingsMenu(false);
+    setNotificationsVisible(!notificationsVisible);
+  };
+
+  const handleProfileEdit = () => {
+    setShowSettingsMenu(false);
+    router.push('/profile-edit');
+  };
+
+  const handleBugReports = () => {
+    setShowSettingsMenu(false);
+    router.push('/bug-reports');
+  };
+
+  const handleLogout = () => {
+    setShowSettingsMenu(false);
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+      await logout();
+      setShowLogoutModal(false);
+      router.replace('/Login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const handleCancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   // Fetch branches (superadmin view)
@@ -188,6 +230,32 @@ export default function InventoryStatusScreen() {
               </View>
             )}
           </TouchableOpacity>
+          <View style={styles.settingsContainer}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setShowSettingsMenu(!showSettingsMenu)}
+            >
+              <Ionicons name="settings-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+            {showSettingsMenu && (
+              <View style={styles.dropdownMenu}>
+                <TouchableOpacity style={styles.menuItem} onPress={handleProfileEdit}>
+                  <Ionicons name="person-outline" size={18} color={Colors.textPrimary} />
+                  <Text style={styles.menuText}>Admin</Text>
+                </TouchableOpacity>
+                <View style={styles.menuDivider} />
+                <TouchableOpacity style={styles.menuItem} onPress={handleBugReports}>
+                  <Ionicons name="bug-outline" size={18} color={Colors.textPrimary} />
+                  <Text style={styles.menuText}>Bug Reports</Text>
+                </TouchableOpacity>
+                <View style={styles.menuDivider} />
+                <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+                  <Ionicons name="log-out-outline" size={18} color={Colors.appleRed} />
+                  <Text style={[styles.menuText, { color: Colors.appleRed }]}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -384,6 +452,60 @@ export default function InventoryStatusScreen() {
           )}
         </View>
       )}
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelLogout}
+      >
+        <View style={styles.logoutOverlay}>
+          <View style={styles.logoutModalCard}>
+            {!isLoggingOut ? (
+              <>
+                <View style={styles.logoutIconContainer}>
+                  <Ionicons name="log-out-outline" size={56} color={Colors.appleRed} />
+                </View>
+
+                <Text style={styles.logoutTitle}>Logout</Text>
+                <Text style={styles.logoutMessage}>Are you sure you want to log out?</Text>
+                <Text style={styles.logoutSubtitle}>
+                  You will need to log in again to access your account.
+                </Text>
+
+                <View style={styles.logoutButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.logoutConfirmBtn}
+                    onPress={handleConfirmLogout}
+                    disabled={isLoggingOut}
+                  >
+                    <Text style={styles.logoutConfirmBtnText}>Yes, Logout</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.logoutCancelBtn}
+                    onPress={handleCancelLogout}
+                    disabled={isLoggingOut}
+                  >
+                    <Text style={styles.logoutCancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <ActivityIndicator
+                  size="large"
+                  color={Colors.primaryGreen}
+                  style={styles.logoutSpinner}
+                />
+                <Text style={styles.logoutLoadingText}>Logging out...</Text>
+                <Text style={styles.logoutLoadingSubtext}>Please wait while we log you out</Text>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -691,5 +813,132 @@ const styles = StyleSheet.create({
   timeRangeOptionTextActive: {
     fontWeight: '600',
     color: Colors.primaryGreen,
+  },
+  settingsContainer: {
+    position: 'relative',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 48,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  menuText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#e5e5e5',
+  },
+  logoutOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    width: 260,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  logoutIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  logoutTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  logoutMessage: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  logoutSubtitle: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+    lineHeight: 15,
+  },
+  logoutButtonContainer: {
+    width: '100%',
+    gap: Spacing.sm,
+  },
+  logoutCancelBtn: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  logoutCancelBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  logoutConfirmBtn: {
+    backgroundColor: Colors.appleRed,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  logoutConfirmBtnText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  logoutSpinner: {
+    marginBottom: Spacing.md,
+  },
+  logoutLoadingText: {
+    fontSize: FontSize.base,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  logoutLoadingSubtext: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
 });

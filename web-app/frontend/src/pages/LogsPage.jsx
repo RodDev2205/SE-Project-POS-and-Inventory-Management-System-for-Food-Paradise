@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../config/api';
 import {
   Search, Filter, Calendar, Download, Clock, User,
-  Activity, AlertCircle, CheckCircle, XCircle, Info
+  Activity, AlertCircle, CheckCircle, XCircle, Info,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 export default function LogsPage() {
@@ -11,6 +12,8 @@ export default function LogsPage() {
   const [selectedDate, setSelectedDate] = useState('today');
   const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // ===========================
   // Fetch activity logs
@@ -99,6 +102,26 @@ export default function LogsPage() {
   };
 
   // ===========================
+  // Categorize actions
+  // ===========================
+  const getCategory = (action) => {
+    const lowerAction = action.toLowerCase();
+    if (lowerAction.includes('login') || lowerAction.includes('logout') || lowerAction.includes('password')) {
+      return 'security';
+    } else if (lowerAction.includes('menu') || lowerAction.includes('product')) {
+      return 'menu';
+    } else if (lowerAction.includes('sale') || lowerAction.includes('transaction') || lowerAction.includes('void') || lowerAction.includes('refund')) {
+      return 'pos';
+    } else if (lowerAction.includes('inventory') || lowerAction.includes('ingredient') || lowerAction.includes('stock')) {
+      return 'inventory';
+    } else if (lowerAction.includes('user') || lowerAction.includes('admin') || lowerAction.includes('branch') || lowerAction.includes('role')) {
+      return 'admin';
+    } else {
+      return 'other';
+    }
+  };
+
+  // ===========================
   // Normalize Logs
   // ===========================
   const normalizedLogs = activityLogs.map(log => ({
@@ -110,7 +133,8 @@ export default function LogsPage() {
     type: log.activity_type === "login"
       ? "success"
       : log.activity_type || "info",
-    branch: log.branch || "System"
+    branch: log.branch || "System",
+    category: getCategory(log.action || log.description)
   }));
 
   // ===========================
@@ -123,7 +147,7 @@ export default function LogsPage() {
       log.details.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesFilter =
-      selectedFilter === 'all' || log.type === selectedFilter;
+      selectedFilter === 'all' || log.category === selectedFilter;
 
     const logDate = new Date(log.timestamp);
     const now = new Date();
@@ -154,14 +178,16 @@ export default function LogsPage() {
   });
 
   // ===========================
-  // Stats (FIXED LOGIC)
+  // Pagination
   // ===========================
-  const activityStats = [
-    { label: 'Total Activities', value: normalizedLogs.length, color: 'text-blue-600' },
-    { label: 'Success', value: normalizedLogs.filter(l => l.type === 'success').length, color: 'text-green-600' },
-    { label: 'Warnings', value: normalizedLogs.filter(l => l.type === 'warning').length, color: 'text-yellow-600' },
-    { label: 'Errors', value: normalizedLogs.filter(l => l.type === 'error').length, color: 'text-red-600' },
-  ];
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedLogs = filteredLogs.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
 
   // ===========================
   // UI
@@ -172,15 +198,6 @@ export default function LogsPage() {
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Activity Logs & Records</h1>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {activityStats.map((stat, idx) => (
-          <div key={idx} className="bg-white rounded-lg shadow-sm p-5">
-            <p className="text-gray-600 text-sm mb-1">{stat.label}</p>
-            <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-col md:flex-row gap-4">
@@ -202,11 +219,13 @@ export default function LogsPage() {
             value={selectedFilter}
             onChange={(e) => setSelectedFilter(e.target.value)}
           >
-            <option value="all">All Types</option>
-            <option value="success">Success</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
+            <option value="all">All Categories</option>
+            <option value="security">Security</option>
+            <option value="menu">Menu</option>
+            <option value="pos">POS</option>
+            <option value="inventory">Inventory</option>
+            <option value="admin">Admin</option>
+            <option value="other">Other</option>
           </select>
         </div>
 
@@ -236,7 +255,7 @@ export default function LogsPage() {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="p-6 text-center text-gray-500">Loading logs...</div>
-          ) : filteredLogs.length === 0 ? (
+          ) : paginatedLogs.length === 0 ? (
             <div className="text-center py-12">
               <Activity size={48} className="mx-auto text-gray-400 mb-3" />
               <p className="text-gray-600">No activity logs found</p>
@@ -250,11 +269,12 @@ export default function LogsPage() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Branch</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Timestamp</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredLogs.map(log => (
+                {paginatedLogs.map(log => (
                   <tr key={log.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">{getActivityIcon(log.type)}</td>
                     <td className="px-6 py-4 flex items-center gap-2">
@@ -263,9 +283,10 @@ export default function LogsPage() {
                     </td>
                     <td className="px-6 py-4">{log.action}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{log.details}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{log.branch}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getActivityBadge(log.type)}`}>
-                        {log.branch}
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 capitalize">
+                        {log.category}
                       </span>
                     </td>
                     <td className="px-6 py-4 flex items-start gap-2 text-sm text-gray-600">
@@ -285,6 +306,44 @@ export default function LogsPage() {
             </table>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div className="text-sm text-gray-700">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredLogs.length)} of {filteredLogs.length} entries
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-3 py-1 border rounded-md text-sm ${
+                    page === currentPage
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

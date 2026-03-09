@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -10,7 +12,6 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
-  SafeAreaView,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -171,7 +172,7 @@ export default function ProfileScreen() {
   }, [selectedBranch]);
 
   return (
-    <View style={[styles.root, { backgroundColor: Colors.greyBg }]}>
+    <SafeAreaView  style={[styles.root, { backgroundColor: Colors.greyBg }]}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryGreen} />
 
       {/* Header */}
@@ -421,7 +422,7 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView >
   );
 }
 
@@ -439,8 +440,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.lg,
-    paddingTop: Spacing.lg + 4,
-  },
+    minHeight: 72,
+},
   backBtn: {
     width: 24,
     height: 24,

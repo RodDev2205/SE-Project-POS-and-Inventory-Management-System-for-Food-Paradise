@@ -28,6 +28,53 @@ export default function AdminReportsPage() {
   const [error, setError] = useState(null);
   const [paymentData, setPaymentData] = useState([]); // cash/gcash breakdown
   const [topProducts, setTopProducts] = useState([]); // product ranking
+  const [voidTracking, setVoidTracking] = useState([]); // void tracking data
+  const [voidPage, setVoidPage] = useState(1); // current page for void tracking
+  const itemsPerPage = 5; // items per page for void tracking
+
+  // helper: convert DB rows into chart-compatible format based on the currently selected period
+  const transformTrend = (rows) => {
+    return rows.map((r) => {
+      let label = r.period_key;
+      switch (period) {
+        case 'daily': { // convert iso date to weekday abbreviation
+          const d = new Date(r.period_key);
+          const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          label = weekday[d.getDay()];
+          break;
+        }
+        case 'weekly': {
+          // r.period_key like "2023-05" -> "W5" (week number)
+          const parts = r.period_key.split('-');
+          label = `W${parseInt(parts[1], 10)}`;
+          break;
+        }
+        case 'monthly': {
+          const [year, mon] = r.period_key.split('-');
+          const m = new Date(year, mon - 1).toLocaleString('en-US', { month: 'short' });
+          label = `${m}`;
+          break;
+        }
+        case 'quarterly': {
+          // r.period_key like "2023-Q2" or "2023-Q1"
+          const parts = r.period_key.split('-Q');
+          if (parts.length === 2) {
+            label = `Q${parts[1]} ${parts[0]}`;
+          } else {
+            label = r.period_key;
+          }
+          break;
+        }
+        case 'yearly': {
+          label = r.period_key;
+          break;
+        }
+        default:
+          break;
+      }
+      return { date: label, sales: r.total_sales };
+    });
+  };
 
   useEffect(() => {
     const fetchSalesData = async () => {
@@ -43,30 +90,36 @@ export default function AdminReportsPage() {
         
         // Fetch sales for selected period (last 7 calendar units)
         const today = new Date();
-        // last 7 calendar days inclusive: start = today - 6, end = today
-        const start = new Date();
-        start.setDate(today.getDate() - 6);
-        // format in local YYYY-MM-DD to avoid UTC shift
+        // compute startDate based on period (7 units back)
+        const start = new Date(today);
         const format = (d) => {
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, '0');
           const dd = String(d.getDate()).padStart(2, '0');
           return `${y}-${m}-${dd}`;
         };
+        if (period === 'daily') {
+          start.setDate(today.getDate() - 6);
+        } else if (period === 'weekly') {
+          start.setDate(today.getDate() - 6 * 7);
+        } else if (period === 'monthly') {
+          start.setMonth(today.getMonth() - 6);
+        }
         const startDate = format(start);
         const endDate = format(today);
 
         const [salesRes, todayRes, paymentRes] = await Promise.all([
           fetch(
-            `${API_BASE_URL}/api/sales-admin/sales?period=${period}&startDate=${startDate}&endDate=${endDate}`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            `${API_BASE_URL}/api/sales-admin/sales-trend?period=${period}&startDate=${startDate}&endDate=${endDate}`,
+            { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
           ),
           fetch(`${API_BASE_URL}/api/sales-admin/today-sales`, {
             headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store'
           }),
           fetch(
             `${API_BASE_URL}/api/sales-admin/payment-methods?startDate=${startDate}&endDate=${endDate}`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
           ),
         ]);
 
@@ -82,43 +135,24 @@ export default function AdminReportsPage() {
           { headers: { Authorization: `Bearer ${token}` } }
         ).then(r => r.ok ? r.json() : []);
 
-        // Transform data for chart (group by period_key)
-        const chartData = salesData.map(item => {
-          let label = item.period_key;
-          if (period === 'daily') {
-            label = new Date(item.period_key).toLocaleDateString('en-US', { weekday: 'short' });
-          } else if (period === 'weekly') {
-            const [yearWeek] = item.period_key.split('-');
-            // week number is after hyphen
-            const wk = item.period_key.split('-')[1];
-            label = `W${wk}`;
-          } else if (period === 'monthly') {
-            const parts = item.period_key.split('-');
-            label = `${parts[0]}-${parts[1].padStart(2,'0')}`;
-          }
-          return { date: label, sales: Number(item.total_sales || 0) };
-        });
+        const voidData = await fetch(
+          `${API_BASE_URL}/api/sales-admin/void-tracking?startDate=${startDate}&endDate=${endDate}`,
+          { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
+        ).then(r => r.ok ? r.json() : []);
 
-        setDailySales(chartData.reverse());
+        // Transform data for chart using same logic as SuperAdmin
+        const transformedData = transformTrend(salesData || []);
+        setDailySales(transformedData);
         setTodaySales(todayData);
-        // convert payment counts to percentages
-        // ensure both cash and gcash keys exist, normalize to lowercase
-        const normalized = payData.map(p => ({
-          payment_method: p.payment_method.toLowerCase(),
-          count: p.count,
-        }));
-        const methods = ['cash','gcash'];
-        const filled = methods.map(m => {
-          const row = normalized.find(r => r.payment_method === m);
-          return { payment_method: m, count: row ? row.count : 0 };
-        });
-        // use raw counts for the pie; recharts will compute percentages
-        const pie = filled.map(p => ({
-          name: p.payment_method,
-          value: p.count,
+        // status breakdown (Completed / Voided / Partial Voided)
+        const pie = payData.map(p => ({
+          name: p.status,
+          value: p.cnt
         }));
         setPaymentData(pie);
         setTopProducts(topData);
+        setVoidTracking(voidData);
+        setVoidPage(1);
         setLoading(false);
       } catch (err) {
         console.error("Error fetching sales data:", err);
@@ -136,10 +170,30 @@ export default function AdminReportsPage() {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`,
+      subtitle: "Net Sales (Gross - Voided)"
     },
     {
-      title: "Total Transactions",
-      value: todaySales?.transaction_count || 0,
+      title: "Gross Sales",
+      value: `₱${(todaySales?.gross_sales || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`,
+      subtitle: "All items ordered"
+    },
+    {
+      title: "Voided Transactions",
+      value: todaySales?.voided_count || 0,
+      subtitle: "Status: Voided"
+    },
+    {
+      title: "Partial Voids",
+      value: todaySales?.partial_voided_count || 0,
+      subtitle: "Status: Partial Voided"
+    },
+    {
+      title: "Staff Who Voided",
+      value: todaySales?.staff_who_voided_count || 0,
+      subtitle: "Unique staff members"
     },
     {
       title: "Average Order Value",
@@ -175,6 +229,10 @@ export default function AdminReportsPage() {
     csv += "\nTop Selling Products\nProduct,Quantity Sold,Total Amount\n";
     topProducts.forEach(p => {
       csv += `${p.product_name || ''},${p.total_qty || 0},${p.total_amount || 0}\n`;
+    });
+    csv += "\nVoid Tracking\nTransaction,Cashier,Item,Amount,Type,Reason\n";
+    voidTracking.forEach(v => {
+      csv += `${v.transaction_number || ''},${v.cashier || ''},${v.item || ''},${v.amount || 0},${v.type || ''},${v.reason || ''}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -252,6 +310,7 @@ export default function AdminReportsPage() {
           >
             <p className="text-sm text-gray-500">{item.title}</p>
             <h2 className="text-2xl font-bold mt-2">{item.value}</h2>
+            {item.subtitle && <p className="text-xs text-gray-400 mt-1">{item.subtitle}</p>}
           </div>
         ))}
       </div>
@@ -294,7 +353,7 @@ export default function AdminReportsPage() {
 
         {/* Payment method pie chart */}
         <div className="bg-white rounded-2xl shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4">Payment Method Breakdown</h2>
+          <h2 className="text-lg font-semibold mb-4">Transaction's Breakdown</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -309,7 +368,12 @@ export default function AdminReportsPage() {
                 {paymentData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={entry.name === 'cash' ? '#8884d8' : '#82ca9d'}
+                    fill={
+                      entry.name === 'Completed' ? '#8884d8' :
+                      entry.name === 'Voided' ? '#e74c3c' :
+                      entry.name === 'Partial Voided' ? '#f39c12' :
+                      '#ccc'
+                    }
                   />
                 ))}
               </Pie>
@@ -345,6 +409,53 @@ export default function AdminReportsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Void Tracking Table */}
+      <div className="bg-white rounded-2xl shadow-md p-6">
+        <h2 className="text-lg font-semibold mb-4">Void Tracking</h2>
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr>
+              <th className="p-2 border-b">Transaction</th>
+              <th className="p-2 border-b">Cashier</th>
+              <th className="p-2 border-b">Item</th>
+              <th className="p-2 border-b">Amount</th>
+              <th className="p-2 border-b">Type</th>
+              <th className="p-2 border-b">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {voidTracking.slice((voidPage - 1) * itemsPerPage, voidPage * itemsPerPage).map((item, idx) => (
+              <tr key={idx} className="hover:bg-gray-100">
+                <td className="p-2 border-b">{item.transaction_number}</td>
+                <td className="p-2 border-b">{item.cashier}</td>
+                <td className="p-2 border-b">{item.item}</td>
+                <td className="p-2 border-b">₱{Number(item.amount).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                <td className="p-2 border-b">{item.type}</td>
+                <td className="p-2 border-b">{item.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* Pagination for Void Tracking */}
+        <div className="flex justify-between items-center mt-4">
+          <button
+            onClick={() => setVoidPage(Math.max(1, voidPage - 1))}
+            disabled={voidPage === 1}
+            className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          >
+            Previous
+          </button>
+          <span>Page {voidPage} of {Math.ceil(voidTracking.length / itemsPerPage)}</span>
+          <button
+            onClick={() => setVoidPage(Math.min(Math.ceil(voidTracking.length / itemsPerPage), voidPage + 1))}
+            disabled={voidPage === Math.ceil(voidTracking.length / itemsPerPage)}
+            className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

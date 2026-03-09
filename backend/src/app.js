@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
+import { db } from "./config/db.js";
 
 import adminRoutes from "./routes/adminRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -25,12 +26,18 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-  origin: "https://deployment-frontend-repo.vercel.app"
+  origin: [
+    "http://localhost:5173",
+    "https://deployment-frontend-repo.vercel.app"
+  ]
 }));
 app.use(express.json());
 // serve uploaded files from configurable directory (Railway volume mounted at /app/uploads)
 const uploadDir = process.env.UPLOAD_DIR || path.join(path.resolve(), "uploads");
 app.use("/uploads", express.static(uploadDir));
+
+// Activity logs table should already exist - no need to create it here
+console.log("✅ Using existing activity_logs table");
 
 // Register routes
 app.use("/api/admin", adminRoutes);

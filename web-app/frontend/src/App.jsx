@@ -13,6 +13,7 @@ import LogsPage from "./pages/LogsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ChatRoomPage from "./pages/ChatRoomPage";
 import MenuListPage from "./pages/MenuListPage";
+import HomePage from "./pages/HomePage";
 
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -22,7 +23,7 @@ function App() {
     <AlertProvider>
       <Router>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<HomePage />} />
         {/* PUBLIC ROUTE */}
         <Route path="/login" element={<Login />} />
 

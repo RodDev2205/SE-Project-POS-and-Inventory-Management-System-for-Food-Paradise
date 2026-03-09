@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import {
   View,
   Text,
@@ -623,8 +624,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingLeft: 12,
     paddingRight: 16,
-    paddingTop: 12,
-    paddingBottom: 2,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+    paddingBottom: 7,
     minHeight: 72,
     gap: 12,
   },

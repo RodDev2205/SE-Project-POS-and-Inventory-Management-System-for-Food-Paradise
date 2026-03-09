@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import {
   View,
   Text,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Platform,
   Dimensions,
   Modal,
   ActivityIndicator,
@@ -649,8 +651,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 1,
     paddingRight: 16,
-    paddingTop: 12,
-    paddingBottom: 2,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+    paddingBottom: 7,
     minHeight: 72,
   },
   logoWrap: {

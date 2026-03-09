@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import {
   View,
   Text,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Platform,
   TextInput,
   Alert,
 } from 'react-native';
@@ -75,7 +77,7 @@ export default function BugReportsScreen() {
         <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bug Reports & Feedback</Text>
+        <Text style={styles.headerTitle}>Reports & Feedback</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -166,15 +168,18 @@ const styles = StyleSheet.create({
   },
 
   // Header
-  header: {
-    backgroundColor: Colors.primaryGreenDark,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    paddingTop: Spacing.lg + 4,
-  },
+    header: {
+      backgroundColor: Colors.primaryGreenDark,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.lg,
+      paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+      minHeight: 60 + (Platform.OS === 'android' ? RNStatusBar.currentHeight : 0),
+      paddingBottom: 12,
+      gap: 12,
+    },
   backBtn: {
     width: 24,
     height: 24,

@@ -4,10 +4,10 @@ import { useAlert } from "@/context/AlertContext";
 export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
   const { error: alertError } = useAlert();
 
-  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [amountPaid, setAmountPaid] = useState("");
   const [discountType, setDiscountType] = useState("none");
   const [discountValue, setDiscountValue] = useState("");
+  const [orderType, setOrderType] = useState("dine-in"); // dine-in or takeout
 
   // Ensure numbers are always safe
   const safeTotal = Number(totalAmount) || 0;
@@ -28,12 +28,10 @@ export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
   const change = safeAmountPaid - finalAmount;
   const isValidPayment = safeAmountPaid >= finalAmount && finalAmount > 0;
 
-  const handleConfirm = () => {
-    if (!paymentMethod) {
-      alertError("Payment", "Please select a payment method.");
-      return;
-    }
+  // ensure orderType is valid
+  const validOrder = orderType === 'dine-in' || orderType === 'takeout';
 
+  const handleConfirm = () => {
     if (finalAmount <= 0) {
       alertError("Payment", "Invalid total amount.");
       return;
@@ -45,10 +43,11 @@ export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
     }
 
     onConfirm({
-      paymentMethod,
+      paymentMethod: "cash",
       amountPaid: safeAmountPaid,
       finalAmount,
       change,
+      orderType,
       discount: {
         type: discountType,
         value: safeDiscountValue,
@@ -70,7 +69,38 @@ export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
         {/* LEFT COLUMN */}
         <div className="lg:w-1/2 space-y-6">
 
-          {/* Order Summary */}
+{/* Order Type */}
+      <div className="mb-4">
+        <label className="block text-sm font-semibold text-gray-700 mb-1">
+          Order Type
+        </label>
+        <div className="flex items-center gap-4">
+          <label className="inline-flex items-center">
+            <input
+              type="radio"
+              name="orderType"
+              value="dine-in"
+              checked={orderType === 'dine-in'}
+              onChange={() => setOrderType('dine-in')}
+              className="form-radio"
+            />
+            <span className="ml-2 text-sm">Dine-in</span>
+          </label>
+          <label className="inline-flex items-center">
+            <input
+              type="radio"
+              name="orderType"
+              value="takeout"
+              checked={orderType === 'takeout'}
+              onChange={() => setOrderType('takeout')}
+              className="form-radio"
+            />
+            <span className="ml-2 text-sm">Takeout</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Order Summary */}
           <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
             <h3 className="font-semibold text-gray-700 mb-3">
               Order Summary
@@ -136,29 +166,6 @@ export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
             )}
           </div>
 
-          {/* Payment Method */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Payment Method
-            </label>
-
-            <div className="grid grid-cols-3 gap-2">
-              {["cash", "gcash", "card"].map((method) => (
-                <button
-                  key={method}
-                  onClick={() => setPaymentMethod(method)}
-                  className={`py-2 px-3 rounded text-sm font-medium transition-all ${
-                    paymentMethod === method
-                      ? "bg-green-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  {method.charAt(0).toUpperCase() + method.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
         </div>
 
         {/* RIGHT COLUMN */}
@@ -215,9 +222,9 @@ export default function PaymentModal({ totalAmount = 0, onConfirm, onClose }) {
 
             <button
               onClick={handleConfirm}
-              disabled={!isValidPayment}
+              disabled={!isValidPayment || !validOrder}
               className={`flex-1 px-4 py-3 rounded font-semibold transition-colors ${
-                isValidPayment
+                isValidPayment && validOrder
                   ? "bg-green-600 hover:bg-green-700 text-white"
                   : "bg-gray-400 text-gray-600 cursor-not-allowed"
               }`}

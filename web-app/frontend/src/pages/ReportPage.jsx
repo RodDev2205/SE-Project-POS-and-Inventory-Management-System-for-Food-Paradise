@@ -77,6 +77,11 @@ export default function ReportPage() {
   // menu performance data fetched from backend
   const [menuPerformance, setMenuPerformance] = useState([]);
 
+  // void transactions data for superadmin
+  const [voidTransactions, setVoidTransactions] = useState([]);
+  const [voidCurrentPage, setVoidCurrentPage] = useState(1);
+  const voidItemsPerPage = 5;
+
   // Calculate branch contribution percentages
   const totalBranchSales = branchComparisonData.reduce((sum, b) => sum + Number(b.total_sales), 0);
   const branchContribution = branchComparisonData.map((branch, idx) => {
@@ -100,11 +105,15 @@ export default function ReportPage() {
     const prevRevenue = Number(b.prev_sales || 0);
     const prevDays = Number(b.prev_window_days || 0);
     // compute growth percentage relative to previous period
-    // avoid misleadingly large percentages when previous revenue is tiny
+    // handle edge case when previous sales = 0
     let growthDisplay = 'N/A';
-    if (prevRevenue >= 1) {
+    if (prevRevenue > 0) {
       const g = ((revenue - prevRevenue) / prevRevenue) * 100;
       growthDisplay = `${g.toFixed(1)}%`;
+    } else if (prevRevenue === 0 && revenue > 0) {
+      growthDisplay = '100.0%';
+    } else if (prevRevenue === 0 && revenue === 0) {
+      growthDisplay = '0.0%';
     }
     return {
       branch: b.branch_name,
@@ -125,15 +134,51 @@ export default function ReportPage() {
 
   // KPI Cards (stateful — populated from backend)
   const [kpiCards, setKpiCards] = useState([
-    { title: 'Total Revenue', value: '₱3,160,000', change: '+12.5%', icon: PhilippinePeso, color: 'bg-green-100 text-green-600' },
-    { title: 'Total Transactions', value: '4,250', change: '+8.2%', icon: BarChart3, color: 'bg-blue-100 text-blue-600' },
-    { title: 'Average Order Value', value: '₱743', change: '+5.1%', icon: TrendingUp, color: 'bg-purple-100 text-purple-600' },
-    { title: 'Active Branches', value: '4', change: '0%', icon: Package, color: 'bg-orange-100 text-orange-600' },
-    { title: 'Avg Transactions/Day', value: '607', change: '+3.2%', icon: Users, color: 'bg-pink-100 text-pink-600' },
-    { title: 'Month-to-Date', value: '28 days', change: '-2 days', icon: Calendar, color: 'bg-indigo-100 text-indigo-600' },
+    { title: 'Total Revenue', value: '0', change: '+0%', icon: PhilippinePeso, color: 'bg-green-100 text-green-600' },
+    { title: 'Total Transactions', value: '0', change: '+0%', icon: BarChart3, color: 'bg-blue-100 text-blue-600' },
+    { title: 'Average Order Value', value: '0', change: '+0%', icon: TrendingUp, color: 'bg-purple-100 text-purple-600' },
+    { title: 'Active Branches', value: '0', change: '+0%', icon: Package, color: 'bg-orange-100 text-orange-600' },
+    { title: 'Avg Transactions/Day', value: '0', change: '+0%', icon: Users, color: 'bg-pink-100 text-pink-600' },
+    { title: 'Month-to-Date', value: '0 days', change: '+0 days', icon: Calendar, color: 'bg-indigo-100 text-indigo-600' },
   ]);
 
   const formatCurrency = (n) => `₱${Number(n || 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
+  const getPreviousRangeDates = (range) => {
+    const today = new Date();
+    let start = new Date();
+    let end = new Date();
+    if (range === 'daily') {
+      // Previous day
+      start = new Date(today);
+      start.setDate(today.getDate() - 1);
+      end = new Date(start);
+    } else if (range === 'weekly') {
+      // Previous week (7 days before current week)
+      start = new Date(today);
+      start.setDate(today.getDate() - 13);
+      end = new Date(today);
+      end.setDate(today.getDate() - 7);
+    } else if (range === 'monthly') {
+      // Previous month
+      start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      end = new Date(today.getFullYear(), today.getMonth(), 0);
+    } else if (range === 'quarterly') {
+      // Previous quarter
+      const currentQuarter = Math.floor(today.getMonth() / 3);
+      const prevQuarter = currentQuarter - 1;
+      const prevYear = prevQuarter < 0 ? today.getFullYear() - 1 : today.getFullYear();
+      const prevQuarterMonth = prevQuarter < 0 ? 9 : prevQuarter * 3;
+      start = new Date(prevYear, prevQuarterMonth, 1);
+      end = new Date(prevYear, prevQuarterMonth + 3, 0);
+    } else if (range === 'yearly') {
+      // Previous year
+      start = new Date(today.getFullYear() - 1, 0, 1);
+      end = new Date(today.getFullYear() - 1, 11, 31);
+    }
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return { startDate: fmt(start), endDate: fmt(end) };
+  };
 
   const getRangeDates = (range) => {
     const today = new Date();
@@ -183,14 +228,46 @@ export default function ReportPage() {
         });
         if (!res.ok) throw new Error('Failed to fetch KPIs');
         const data = await res.json();
+        // Fetch previous period data for growth calculation
+        const { startDate: prevStart, endDate: prevEnd } = getPreviousRangeDates(dateRange);
+        let prevData = null;
+        try {
+          const prevRes = await fetch(`${API_BASE_URL}/api/sales-superadmin/kpis?startDate=${prevStart}&endDate=${prevEnd}${branchParam}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (prevRes.ok) {
+            prevData = await prevRes.json();
+          }
+        } catch (err) {
+          console.error('Failed to fetch previous KPIs', err);
+        }
+        
+        // Calculate sales growth
+        let salesGrowth = 'N/A';
+        if (prevData && prevData.total_sales !== undefined) {
+          const currentSales = Number(data.total_sales || 0);
+          const prevSales = Number(prevData.total_sales || 0);
+          if (prevSales > 0) {
+            const growth = ((currentSales - prevSales) / prevSales) * 100;
+            salesGrowth = `${growth.toFixed(1)}%`;
+          } else if (prevSales === 0 && currentSales > 0) {
+            salesGrowth = '100.0%';
+          } else {
+            salesGrowth = '0.0%';
+          }
+        }
+        
         // Map API response to card layout
+        // Order: Gross Sales → Voided Sales → Total Sales (Net), then other KPIs
         const cards = [
-          { title: 'Total Revenue', value: formatCurrency(data.total_sales), change: '', icon: PhilippinePeso, color: 'bg-green-100 text-green-600' },
-          { title: 'Total Transactions', value: data.transaction_count?.toString() || '0', change: '', icon: BarChart3, color: 'bg-blue-100 text-blue-600' },
-          { title: 'Average Order Value', value: formatCurrency(data.avg_order_value), change: '', icon: TrendingUp, color: 'bg-purple-100 text-purple-600' },
-          { title: 'Active Branches', value: data.active_branches?.toString() || '0', change: '', icon: Package, color: 'bg-orange-100 text-orange-600' },
-          { title: 'Avg Transactions/Day', value: Number(data.avg_transactions_per_day).toFixed(2), change: '', icon: Users, color: 'bg-pink-100 text-pink-600' },
-          { title: 'Month-to-Date', value: `${data.month_to_date_days} days`, change: '', icon: Calendar, color: 'bg-indigo-100 text-indigo-600' },
+          { title: 'Gross Sales', value: formatCurrency(data.gross_sales), change: '', icon: PhilippinePeso, color: 'bg-blue-100 text-blue-600' },
+          { title: 'Voided Sales', value: formatCurrency(data.voided_sales), change: '', icon: PhilippinePeso, color: 'bg-red-100 text-red-600' },
+          { title: 'Total Sales', value: formatCurrency(data.total_sales), change: `(Gross - Voided)`, icon: PhilippinePeso, color: 'bg-green-100 text-green-600' },
+          { title: 'Sales Growth', value: salesGrowth, change: `vs Previous ${dateRange.charAt(0).toUpperCase() + dateRange.slice(1)}`, icon: TrendingUp, color: 'bg-purple-100 text-purple-600' },
+          { title: 'Total Transactions', value: data.transaction_count?.toString() || '0', change: '', icon: BarChart3, color: 'bg-indigo-100 text-indigo-600' },
+          { title: 'Average Order Value', value: formatCurrency(data.avg_order_value), change: '(Total Sales ÷ Orders)', icon: TrendingUp, color: 'bg-orange-100 text-orange-600' },
+          { title: 'Active Branches', value: data.active_branches?.toString() || '0', change: '', icon: Package, color: 'bg-pink-100 text-pink-600' },
+          { title: 'Avg Transactions/Day', value: Number(data.avg_transactions_per_day).toFixed(2), change: '', icon: Users, color: 'bg-teal-100 text-teal-600' },
         ];
         setKpiCards(cards);
       } catch (err) {
@@ -275,6 +352,29 @@ export default function ReportPage() {
       }
     };
     fetchMenuPerformance();
+
+    const fetchVoidTransactions = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const { startDate, endDate } = getRangeDates(dateRange);
+        const branchParam = selectedBranch && selectedBranch !== 'all' ? `&branchId=${selectedBranch}` : '';
+        const res = await fetch(`${API_BASE_URL}/api/sales-superadmin/void-transactions?startDate=${startDate}&endDate=${endDate}${branchParam}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('void transactions API error body', errText);
+          throw new Error(`Failed to fetch void transactions: ${res.status}`);
+        }
+        const data = await res.json();
+        setVoidTransactions(data || []);
+        setVoidCurrentPage(1); // Reset to first page when data changes
+      } catch (err) {
+        console.error('Failed to load void transactions', err);
+      }
+    };
+    fetchVoidTransactions();
   }, [dateRange, selectedBranch]);
 
   const handleExportPDF = () => {
@@ -542,9 +642,12 @@ export default function ReportPage() {
                     {
                       (() => {
                         const raw = row.growth;
-                        const num = parseFloat(String(raw).replace('%',''));
+                        let num = NaN;
+                        if (raw !== 'N/A') {
+                          num = parseFloat(raw.replace('%', ''));
+                        }
                         let colorClass = 'text-gray-600';
-                        if (Number.isFinite(num)) {
+                        if (!isNaN(num)) {
                           if (num > 0) colorClass = 'text-green-600';
                           else if (num < 0) colorClass = 'text-red-600';
                           else colorClass = 'text-gray-600';
@@ -595,6 +698,89 @@ export default function ReportPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Void Transactions Section */}
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Void Transactions</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Transaction ID</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Branch</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Status</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Cashier</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Void Amount</th>
+                  <th className="px-4 py-3 text-sm font-semibold text-gray-900">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const startIndex = (voidCurrentPage - 1) * voidItemsPerPage;
+                  const endIndex = startIndex + voidItemsPerPage;
+                  const paginatedData = voidTransactions.slice(startIndex, endIndex);
+
+                  return paginatedData.map((transaction, idx) => (
+                    <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">#{transaction.transaction_number}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{transaction.branch_name}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          transaction.status === 'Voided' 
+                            ? 'bg-red-100 text-red-800' 
+                            : transaction.status === 'Partial Refunded'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {transaction.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{transaction.cashier_name || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">₱{Number(transaction.void_amount || 0).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {new Date(transaction.created_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+
+            {/* Pagination Controls */}
+            {voidTransactions.length > voidItemsPerPage && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-600">
+                  Showing {Math.min((voidCurrentPage - 1) * voidItemsPerPage + 1, voidTransactions.length)} to {Math.min(voidCurrentPage * voidItemsPerPage, voidTransactions.length)} of {voidTransactions.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setVoidCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={voidCurrentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Page {voidCurrentPage} of {Math.ceil(voidTransactions.length / voidItemsPerPage)}
+                  </span>
+                  <button
+                    onClick={() => setVoidCurrentPage(prev => Math.min(prev + 1, Math.ceil(voidTransactions.length / voidItemsPerPage)))}
+                    disabled={voidCurrentPage === Math.ceil(voidTransactions.length / voidItemsPerPage)}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

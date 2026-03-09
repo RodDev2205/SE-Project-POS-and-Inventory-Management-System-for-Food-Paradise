@@ -9,7 +9,7 @@ const AddIngredientModal = ({ isOpen, onClose, onAdd }) => {
     quantity: 1,
     servings_per_unit: 1,
     low_stock_threshold: 5,
-    status: "active",
+    status: "available", // match backend enum
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -190,8 +190,8 @@ const AddIngredientModal = ({ isOpen, onClose, onAdd }) => {
               onChange={handleChange}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-green-500 focus:outline-none"
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
             </select>
           </div>
 

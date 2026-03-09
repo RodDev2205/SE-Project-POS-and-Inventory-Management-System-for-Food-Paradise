@@ -1,6 +1,21 @@
 import { db } from "../config/db.js";
 import { io } from "../../server.js"; // notify dashboard updates
 
+// Helper function to log inventory activities
+async function logInventoryActivity({ userId, branchId, activityType, description, referenceId }) {
+  try {
+    await db.query(
+      `INSERT INTO activity_logs
+        (user_id, branch_id, activity_type, reference_id, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, branchId, activityType, referenceId, description]
+    );
+  } catch (err) {
+    console.error('Failed to log inventory activity:', err);
+    // Don't throw error to avoid breaking the main operation
+  }
+}
+
 export const addIngredient = async (req, res) => {
   try {
     console.log("REQ.USER:", req.user);
@@ -17,9 +32,22 @@ export const addIngredient = async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     // Determine status based on quantity and threshold
-    const effectiveStatus = (Number(quantity) === 0)
-      ? 'out_of_stock'
-      : (Number(quantity) <= Number(low_stock_threshold) ? 'low_stock' : (status || 'available'));
+    // translate front-end status values to enum ('active' -> 'available', 'inactive' -> 'unavailable')
+    let effectiveStatus;
+    if (Number(quantity) === 0) {
+      effectiveStatus = 'out_of_stock';
+    } else if (Number(quantity) <= Number(low_stock_threshold)) {
+      effectiveStatus = 'low_stock';
+    } else {
+      // convert provided status or default to 'available'
+      if (status === 'active') {
+        effectiveStatus = 'available';
+      } else if (status === 'inactive') {
+        effectiveStatus = 'unavailable';
+      } else {
+        effectiveStatus = 'available';
+      }
+    }
 
     const values = [
       item_name,
@@ -35,6 +63,16 @@ export const addIngredient = async (req, res) => {
     const [result] = await db.execute(query, values);
 
     console.log("Ingredient inserted with ID:", result.insertId);
+    
+    // Log the activity
+    await logInventoryActivity({
+      userId: req.user.user_id,
+      branchId: branch_id,
+      activityType: 'inventory_add',
+      description: `Added ingredient: ${item_name} (${quantity} units)`,
+      referenceId: result.insertId
+    });
+    
     // notify dashboard
     io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });
     res.status(201).json({ message: "Ingredient added successfully", id: result.insertId });
@@ -225,9 +263,21 @@ export const editIngredientById = async (req, res) => {
       WHERE inventory_id = ? AND branch_id = ?
     `;
     // Recompute status so threshold rules are always enforced
-    const effectiveStatus = (Number(quantity) === 0)
-      ? 'out_of_stock'
-      : (Number(quantity) <= Number(low_stock_threshold) ? 'low_stock' : (status || 'available'));
+    // convert provided status to enum values
+    let effectiveStatus;
+    if (Number(quantity) === 0) {
+      effectiveStatus = 'out_of_stock';
+    } else if (Number(quantity) <= Number(low_stock_threshold)) {
+      effectiveStatus = 'low_stock';
+    } else {
+      if (status === 'active') {
+        effectiveStatus = 'available';
+      } else if (status === 'inactive') {
+        effectiveStatus = 'unavailable';
+      } else {
+        effectiveStatus = status || 'available';
+      }
+    }
 
     const values = [
       item_name,
@@ -245,6 +295,15 @@ export const editIngredientById = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Ingredient not found or no permission" });
     }
+
+    // Log the activity
+    await logInventoryActivity({
+      userId: req.user.user_id,
+      branchId: branch_id,
+      activityType: 'inventory_adjustment',
+      description: `Updated ingredient: ${item_name} (quantity: ${quantity})`,
+      referenceId: id
+    });
 
     // notify dashboard for branch
     io.to(`branch_${branch_id}`).emit('dashboardUpdate', { branch_id });

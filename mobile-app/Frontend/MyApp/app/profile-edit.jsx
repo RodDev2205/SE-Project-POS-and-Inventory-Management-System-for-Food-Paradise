@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { StatusBar as RNStatusBar } from 'react-native';
 import { NotificationContext } from '@/context/NotificationContext';
 import {
   View,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Platform,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -146,7 +148,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.lg,
-    paddingTop: Spacing.lg + 4,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 12,
+    minHeight: 60 + (Platform.OS === 'android' ? RNStatusBar.currentHeight : 0),
+    paddingBottom: 12,
+    gap: 12,
   },
   backBtn: {
     width: 24,
