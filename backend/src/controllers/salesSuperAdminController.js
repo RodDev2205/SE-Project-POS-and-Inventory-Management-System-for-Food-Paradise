@@ -39,36 +39,35 @@ export async function getKpis(req, res) {
     const startSql = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')} 00:00:00`;
     const endSql = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')} 23:59:59`;
 
-    // Build WHERE clause for date and branch (no status filter for gross sales)
+    // Build WHERE clause for completed/amount queries (KPIs use only completed orders)
     const whereClause = branchId && branchId !== 'all'
-      ? `t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
-      : `t.created_at BETWEEN ? AND ?`;
+      ? `t.status = 'Completed' AND t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
+      : `t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`;
     const params = branchId && branchId !== 'all'
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
-    // 1) Total sales (net: only completed) and gross sales (all transactions)
-    const [totalRows] = await db.execute(
-      `SELECT 
-         COALESCE(SUM(CASE WHEN t.status = 'Completed' THEN ti.quantity * ti.price ELSE 0 END), 0) AS total_sales,
-         COALESCE(SUM(ti.quantity * ti.price), 0) AS gross_sales
-       FROM transactions t 
-       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-       WHERE ${whereClause}`,
-      params
-    );
-
-    // 2) Total transactions (only completed, filtered by branch if selected)
-    const completedWhere = branchId && branchId !== 'all'
-      ? `t.status = 'Completed' AND t.created_at BETWEEN ? AND ? AND t.branch_id = ?`
-      : `t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`;
-    const completedParams = branchId && branchId !== 'all'
+    // build a second clause for status counts which should include all statuses but still respect date/branch
+    const statusClause = branchId && branchId !== 'all'
+      ? `created_at BETWEEN ? AND ? AND branch_id = ?`
+      : `created_at BETWEEN ? AND ?`;
+    const statusParams = branchId && branchId !== 'all'
       ? [startSql, endSql, parseInt(branchId)]
       : [startSql, endSql];
 
+    // 1) Total sales (filtered by branch if selected)
+    const [totalRows] = await db.execute(
+      `SELECT COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales 
+       FROM transactions t 
+       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
+       WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')}`,
+      params
+    );
+
+    // 2) Total transactions (filtered by branch if selected)
     const [countRows] = await db.execute(
-      `SELECT COUNT(*) AS transaction_count FROM transactions t WHERE ${completedWhere}`,
-      completedParams
+      `SELECT COUNT(*) AS transaction_count FROM transactions t WHERE ${whereClause}`,
+      params
     );
 
     // 3) Four status counts (without filtering to Completed so we capture refunds/voids)
@@ -84,27 +83,26 @@ export async function getKpis(req, res) {
       statusParams
     );
 
-    // 4) Average order value (only completed, filtered by branch if selected)
+    // 4) Average order value (filtered by branch if selected)
     const [avgRows] = await db.execute(
       `SELECT AVG(net_total) AS avg_order_value 
        FROM (
          SELECT t.transaction_id, COALESCE(SUM(ti.quantity * ti.price), 0) as net_total 
          FROM transactions t 
          LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id 
-         WHERE ${completedWhere} 
+         WHERE ${whereClause.replace('status = \'Completed\' AND created_at BETWEEN ? AND ?', 't.status = \'Completed\' AND t.created_at BETWEEN ? AND ?')} 
          GROUP BY t.transaction_id
        ) as sub`,
-      completedParams
+      params
     );
 
     // 4) Active branches (ALWAYS unfiltered - shows all branches with activity)
     const [branchRows] = await db.execute(
-      `SELECT COUNT(DISTINCT branch_id) AS active_branches FROM transactions WHERE status = 'Completed' AND created_at BETWEEN ? AND ?`,
+      `SELECT COUNT(DISTINCT t.branch_id) AS active_branches FROM transactions t WHERE t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`,
       [startSql, endSql]
     );
 
     const totalSales = Number(totalRows[0].total_sales || 0);
-    const grossSales = Number(totalRows[0].gross_sales || 0);
     const transactionCount = Number(countRows[0].transaction_count || 0);
     const partialRefunded = statusRows[0]?.partial_refunded_count || 0;
     const refunded = statusRows[0]?.refunded_count || 0;
@@ -123,7 +121,6 @@ export async function getKpis(req, res) {
 
     return res.json({
       total_sales: totalSales,
-      gross_sales: grossSales,
       transaction_count: transactionCount,
       partial_refunded_count: partialRefunded,
       refunded_count: refunded,
