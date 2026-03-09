@@ -6,6 +6,8 @@ import { db } from "../config/db.js";
 //   startDate, endDate - optional YYYY-MM-DD boundaries (default month-to-date)
 //   branchId - optional branch filter (use 'all' or omit for no filter)
 export async function getSalesTrend(req, res) {
+  // ensure clients always fetch up-to-date trend data
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const { period = 'daily', startDate, endDate } = req.query;
     let { branchId } = req.query; // may be overwritten for admins
@@ -63,19 +65,20 @@ export async function getSalesTrend(req, res) {
     }
 
     // build where clause; always filter completed and date range
-    let where = `status = 'Completed' AND created_at BETWEEN ? AND ?`;
+    let where = `t.status = 'Completed' AND t.created_at BETWEEN ? AND ?`;
     const params = [startSql, endSql];
     if (branchId && branchId !== 'all') {
-      where += ` AND branch_id = ?`;
+      where += ` AND t.branch_id = ?`;
       params.push(parseInt(branchId));
     }
 
     const sql = `
       SELECT
         ${groupExpr} AS period_key,
-        SUM(CASE WHEN status = 'Completed' THEN total_amount ELSE 0 END) AS total_sales,
-        COUNT(CASE WHEN status = 'Completed' THEN 1 END) AS transaction_count
-      FROM transactions
+        COALESCE(SUM(ti.quantity * ti.price), 0) AS total_sales,
+        COUNT(DISTINCT t.transaction_id) AS transaction_count
+      FROM transactions t
+      LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
       WHERE ${where}
       GROUP BY ${groupExpr}
       ORDER BY ${groupExpr} ASC
