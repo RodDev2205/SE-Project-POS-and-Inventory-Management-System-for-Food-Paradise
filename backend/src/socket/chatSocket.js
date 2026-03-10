@@ -90,7 +90,7 @@ export default (io) => {
 
         for (const member of members) {
           await db.execute(
-            "INSERT IGNORE INTO message_status (message_id, user_id, status) VALUES (?, ?, 'delivered')",
+            "INSERT INTO message_status (message_id, user_id, status) VALUES (?, ?, 'delivered') ON CONFLICT (message_id, user_id) DO NOTHING",
             [message_id, member.user_id]
           );
         }

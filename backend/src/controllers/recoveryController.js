@@ -38,7 +38,7 @@ export const startRecovery = async (req, res) => {
     await db.query(
       `INSERT INTO recovery_attempts (user_id, failed_attempts, lock_until, last_attempt_at)
        VALUES (?, 0, NULL, NOW())
-       ON DUPLICATE KEY UPDATE last_attempt_at = NOW()`,
+       ON CONFLICT (user_id) DO UPDATE SET last_attempt_at = NOW()`,
       [user.user_id]
     );
 

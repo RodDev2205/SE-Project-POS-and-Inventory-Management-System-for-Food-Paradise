@@ -83,7 +83,7 @@ export const createAdmin = async (req, res) => {
     const newUserId = result.insertId;
     await db.query(
       `UPDATE users
-       SET pin_code = LPAD(FLOOR(RAND() * 10000), 4, '0')
+       SET pin_code = LPAD(FLOOR(RAND() * 10000)::text, 4, '0')
        WHERE user_id = ?`,
       [newUserId]
     );
