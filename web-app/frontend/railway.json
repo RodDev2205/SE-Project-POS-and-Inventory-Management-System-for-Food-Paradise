@@ -1,0 +1,10 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "npm run preview"
+  },
+  "buildCommand": "npm run build",
+  "rootDirectory": "web-app/frontend"
+}

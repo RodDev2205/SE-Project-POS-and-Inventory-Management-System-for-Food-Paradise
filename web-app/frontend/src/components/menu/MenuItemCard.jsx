@@ -54,12 +54,6 @@ export default function MenuItemCard({ item, onEdit, onDelete }) {
             >
               <Edit className="w-5 h-5" />
             </button>
-            <button
-              className="p-2 text-red-600 hover:bg-gray-100 rounded-full"
-              onClick={() => onDelete(item.product_id)}
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </div>
