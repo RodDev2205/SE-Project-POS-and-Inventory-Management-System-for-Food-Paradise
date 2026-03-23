@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { X, UserPlus } from "lucide-react";
 import API_BASE_URL from "../../config/api";
+import { useAlert } from "../../context/AlertContext";
 
 export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
+  const { success, error } = useAlert();
   const [branches, setBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
 
   const [formData, setFormData] = useState({
-    full_name: "",
+    first_name: "",
+    last_name: "",
     username: "",
     password: "",
     branch_id: "",
+    contact_number: "",
   });
 
   // 🔹 Fetch branches when modal opens
@@ -52,42 +55,49 @@ export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoadingSubmit(true);
-    setErrorMsg("");
 
     try {
       const token = localStorage.getItem("token");
 
+      const payload = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        username: formData.username,
+        password: formData.password,
+        branch_id: formData.branch_id,
+        contact_number: formData.contact_number,
+      };
       const res = await fetch(`${API_BASE_URL}/api/superadmin/createCashier`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create admin");
+        throw new Error(data.error || "Failed to create cashier");
       }
 
-      console.log("Cashier created:", data);
-
-      if (onSubmit) onSubmit();
-
-      onClose();
-
-      // Reset form
-      setFormData({
-        full_name: "",
-        username: "",
-        password: "",
-        branch_id: "",
+      success("Success", "Cashier created successfully!", () => {
+        if (onSubmit) onSubmit();
+        onClose();
+        // Reset form
+        setFormData({
+          first_name: "",
+          last_name: "",
+          username: "",
+          password: "",
+          branch_id: "",
+          contact_number: "",
+        });
       });
     } catch (err) {
       console.error(err);
-      setErrorMsg(err.message);
+      error("Error", err.message);
     } finally {
       setLoadingSubmit(false);
     }
@@ -109,23 +119,35 @@ export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {errorMsg && (
-            <p className="text-red-500 text-sm">{errorMsg}</p>
-          )}
 
-          {/* Full Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Full Name
-            </label>
-            <input
-              type="text"
-              name="full_name"
-              required
-              value={formData.full_name}
-              onChange={handleChange}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
-            />
+          {/* First & Last Name */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                First Name
+              </label>
+              <input
+                type="text"
+                name="first_name"
+                required
+                value={formData.first_name}
+                onChange={handleChange}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Last Name
+              </label>
+              <input
+                type="text"
+                name="last_name"
+                required
+                value={formData.last_name}
+                onChange={handleChange}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+              />
+            </div>
           </div>
 
           {/* Username */}
@@ -153,6 +175,19 @@ export default function AddAdminModal({ isOpen, onClose, onSubmit }) {
               name="password"
               required
               value={formData.password}
+              onChange={handleChange}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
+            />
+          </div>
+          {/* Contact Number */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Contact Number
+            </label>
+            <input
+              type="tel"
+              name="contact_number"
+              value={formData.contact_number}
               onChange={handleChange}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-green-500 focus:outline-none"
             />

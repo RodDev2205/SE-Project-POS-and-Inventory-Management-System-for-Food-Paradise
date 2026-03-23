@@ -24,14 +24,8 @@ export const printReceipt = async (orderData) => {
     }
 
     // Configure the printer (serial connection COM6)
-    const serialPrinter = qz.configs.create("Serial Printer", {
-      type: 'serial',
-      portName: 'COM6',
-      baudRate: 9600,
-      dataBits: 8,
-      stopBits: 1,
-      parity: 'none'
-    });
+    const printer = qz.configs.create("POS-58(copy of 1)");
+
 
     console.log("📄 Formatting receipt for print...");
 
@@ -39,8 +33,17 @@ export const printReceipt = async (orderData) => {
     receipt.push('\x1B\x40'); // init
     receipt.push('\x1B\x61\x01'); // center
     receipt.push('*** Food Paradise POS ***\n');
-    receipt.push('Pasonanca, Zamboanga City\n');
-    receipt.push('Contact: +63 111 222 4444\n');
+    // use branch location/contact if provided
+    if (orderData.location) {
+      receipt.push(`${orderData.location}\n`);
+    } else {
+      receipt.push('Pasonanca, Zamboanga City\n');
+    }
+    if (orderData.contact) {
+      receipt.push(`Contact: ${orderData.contact}\n`);
+    } else {
+      receipt.push('Contact: +63 111 222 4444\n');
+    }
     receipt.push('SALES INVOICE\n');
     receipt.push('-------------------------------\n');
     receipt.push('\x1B\x61\x00'); // left
@@ -53,16 +56,19 @@ export const printReceipt = async (orderData) => {
     receipt.push('-------------------------------\n');
     orderData.cart.forEach(item => {
       const total = item.qty * item.price;
-      receipt.push(`${item.qty.toString().padStart(3)}  ${item.item.padEnd(20)} ₱${total.toFixed(2).padStart(6)}\n`);
-      receipt.push(`      @ ₱${item.price.toFixed(2)}\n`);
+      // right-align price in 10-char field for better alignment
+      const priceField = `PHP${total.toFixed(2)}`.padStart(10);
+      receipt.push(`${item.qty.toString().padStart(3)}  ${item.item.padEnd(16)} ${priceField}\n`);
+      const unitPriceField = `PHP${item.price.toFixed(2)}`.padStart(10);
+      receipt.push(`   @ ${unitPriceField}\n`);
     });
     receipt.push('-------------------------------\n');
-    receipt.push(`Subtotal:                ₱${orderData.total.toFixed(2)}\n`);
+    receipt.push(`Subtotal:              PHP${orderData.total.toFixed(2)}\n`);
     if (orderData.paymentMethod === "Cash") {
-      receipt.push(`Given:                   ₱${parseFloat(orderData.given).toFixed(2)}\n`);
-      receipt.push(`Change:                  ₱${parseFloat(orderData.change).toFixed(2)}\n`);
+      receipt.push(`Given:                 PHP${parseFloat(orderData.given).toFixed(2)}\n`);
+      receipt.push(`Change:                PHP${parseFloat(orderData.change).toFixed(2)}\n`);
     }
-    receipt.push(`TOTAL:                   ₱${orderData.total.toFixed(2)}\n`);
+    receipt.push(`TOTAL:                 PHP${orderData.total.toFixed(2)}\n`);
     receipt.push('-------------------------------\n');
     receipt.push('\x1B\x61\x01');
     receipt.push('Thank you for dining!\n');
@@ -71,7 +77,7 @@ export const printReceipt = async (orderData) => {
     receipt.push('\x1D\x56\x00');
 
     console.log("🖨️ Sending to printer...");
-    await qz.print(serialPrinter, receipt);
+    await qz.print(printer, receipt);
     console.log("✅ Print successful");
   } catch (err) {
     console.error("❌ Print failed:", err);

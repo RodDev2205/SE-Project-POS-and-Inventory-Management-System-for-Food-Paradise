@@ -35,6 +35,7 @@ export const getSalesByPeriod = async (req, res) => {
         COUNT(DISTINCT CASE WHEN t.status = 'Partial Refunded' THEN t.transaction_id END) as partial_refunded_count
       FROM transactions t
       LEFT JOIN transaction_items ti ON t.transaction_id = ti.transaction_id
+      WHERE t.status IN ('Completed', 'Partial Voided')
     `;
 
     let params = [];
@@ -285,7 +286,7 @@ export const getTopProductsByBranch = async (req, res) => {
       FROM transaction_items ti
       JOIN transactions t ON ti.transaction_id = t.transaction_id
       LEFT JOIN products p ON ti.menu_id = p.product_id
-      WHERE t.status = 'Completed'
+      WHERE t.status IN ('Completed', 'Partial Voided')
     `;
     const params = [];
 

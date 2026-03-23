@@ -4,6 +4,7 @@ import { Printer, Eye } from 'lucide-react';
 import Modal from "./Modal/Modal";
 import TransactionDetailModal from "../POScomponent/Modal/TransactionDetailModal";
 import API_BASE_URL from '../../config/api';
+import { printReceipt } from '../../utils/printUtils';
 
 export default function Records () {
     const [records, setRecords] = useState([]);
@@ -15,7 +16,7 @@ export default function Records () {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalData, setModalData] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
-    const { error } = useAlert();
+    const { success, error } = useAlert();
 
     const fetchTransactions = async () => {
         const token = localStorage.getItem("token");
@@ -82,7 +83,7 @@ export default function Records () {
         setDetailLoading(true);
         try {
             const token = localStorage.getItem("token");
-            // fetch transaction details first then send to print endpoint
+            // fetch transaction details first
             const res = await fetch(`${API_BASE_URL}/api/pos/transaction/${transaction.transaction_id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -90,12 +91,27 @@ export default function Records () {
             if (!res.ok) {
                 throw new Error(data.message || "Failed to load transaction");
             }
-            // send payload to print
-            await fetch(`${API_BASE_URL}/api/print-receipt`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify(data),
-            });
+
+            // Format data for printUtils
+            const printData = {
+                date: new Date(data.transaction.created_at).toLocaleString(),
+                orderId: data.transaction.transaction_number,
+                orderType: data.transaction.order_type || "Dine-in",
+                paymentMethod: data.transaction.payment_method || "Cash",
+                location: data.transaction.branch_address || "", // added branch info
+                contact: data.transaction.branch_contact || "",
+                cart: data.items.map(item => ({
+                    qty: parseInt(item.quantity) || 0,
+                    item: item.product_name,
+                    price: parseFloat(item.price) || 0
+                })),
+                total: parseFloat(data.transaction.total_amount) || 0,
+                given: parseFloat(data.transaction.amount_paid) || parseFloat(data.transaction.total_amount) || 0,
+                change: (parseFloat(data.transaction.amount_paid) || 0) - (parseFloat(data.transaction.total_amount) || 0)
+            };
+
+            // Use printUtils to print directly
+            await printReceipt(printData);
             success("Printing", "Receipt sent to printer");
         } catch (err) {
             console.error("Print error", err);
