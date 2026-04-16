@@ -4,9 +4,12 @@ import { ShoppingCart, Trash2, AlertCircle, CheckCircle } from "lucide-react";
 export default function ReceiptPanel({
   cart,
   totalAmount,
+  subtotal,
   handleCheckout,
   setCart,
   decrementItem,
+  incrementItem,
+  updateItemQuantity,
   isCashier,
   isAdmin,
 }) {
@@ -16,10 +19,17 @@ export default function ReceiptPanel({
     year: "numeric",
   });
 
+  const handleQuantityChange = (productId, newQty) => {
+    const qty = parseInt(newQty);
+    if (qty > 0 && updateItemQuantity) {
+      updateItemQuantity(productId, qty);
+    }
+  };
+
   return (
     <div className="w-96 bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-green-700 to-green-800 text-white px-6 py-4 border-b border-emerald-800">
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-4 border-b border-emerald-800">
         <div className="flex items-center gap-2 mb-2">
           <ShoppingCart className="w-5 h-5" />
           <h2 className="font-bold text-xl">Order</h2>
@@ -40,18 +50,39 @@ export default function ReceiptPanel({
           </div>
         ) : (
           cart.map((item) => (
-            <div key={item.product_id} className="flex justify-between items-start text-sm bg-gray-50 rounded-lg p-3 hover:shadow-sm transition-shadow">
-              <button
-                className="w-6 h-6 flex items-center justify-center bg-red-500 text-white rounded-full mr-2 hover:bg-red-600"
-                onClick={() => decrementItem(item.product_id)}
-              >
-                -
-              </button>
+            <div key={item.product_id} className="flex justify-between items-center text-sm bg-gray-50 rounded-lg p-3 hover:shadow-sm transition-shadow group">
               <div className="flex-1 pr-2">
                 <div className="font-semibold text-gray-900 text-xs">{item.item}</div>
-                <div className="text-xs text-gray-600">{item.qty}x @ ₱{item.price.toFixed(2)}</div>
+                <div className="text-xs text-gray-600">₱{item.price.toFixed(2)} each</div>
               </div>
-              <div className="font-bold text-green-700 text-right min-w-max">
+              
+              {/* Quantity Controls */}
+              <div className="flex items-center gap-2 mx-2 bg-white rounded-lg border border-gray-300 px-2 py-1">
+                <button
+                  className="text-red-500 hover:bg-red-50 rounded px-1 font-bold"
+                  onClick={() => decrementItem(item.product_id)}
+                  title="Decrease quantity"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.qty}
+                  onChange={(e) => handleQuantityChange(item.product_id, e.target.value)}
+                  className="w-12 text-center font-bold text-gray-900 border-none focus:outline-none"
+                />
+                <button
+                  className="text-green-600 hover:bg-green-50 rounded px-1 font-bold"
+                  onClick={() => incrementItem && incrementItem(item.product_id)}
+                  title="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Total Price */}
+              <div className="font-bold text-emerald-600 text-right min-w-max">
                 ₱{(item.qty * item.price).toFixed(2)}
               </div>
             </div>
@@ -63,15 +94,11 @@ export default function ReceiptPanel({
       <div className="space-y-3 px-6 py-4 border-b border-gray-200">
         <div className="flex justify-between text-sm text-gray-700">
           <span>Subtotal:</span>
-          <span className="font-semibold">₱{totalAmount.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between text-sm text-gray-700">
-          <span>Discount:</span>
-          <span className="font-semibold">None</span>
+          <span className="font-semibold">₱{subtotal.toFixed(2)}</span>
         </div>
         <div className="flex justify-between items-center pt-2 border-t border-gray-200">
           <span className="font-bold text-gray-900">Total</span>
-          <div className="bg-green-700 text-white rounded-lg px-3 py-2 font-bold text-lg">
+          <div className="bg-emerald-600 text-white rounded-lg px-3 py-2 font-bold text-lg">
             ₱{totalAmount.toFixed(2)}
           </div>
         </div>
@@ -83,7 +110,7 @@ export default function ReceiptPanel({
           className={`w-full font-bold py-2 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm ${
             cart.length === 0
               ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-              : "bg-green-700 hover:bg-green-800 text-white active:scale-95"
+              : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"
           }`}
           onClick={handleCheckout}
           disabled={cart.length === 0}

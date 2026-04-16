@@ -13,17 +13,16 @@ export default function TransactionDetailModal({
   const {
     transaction,
     items,
+    discountDetails,
   } = data;
 
   const { success, error: alertError } = useAlert();
 
   const [showVoidForm, setShowVoidForm] = React.useState(false);
-  const [voidType, setVoidType] = React.useState("full");
   const [reason, setReason] = React.useState("");
   const [adminPin, setAdminPin] = React.useState("");
   const [submittingVoid, setSubmittingVoid] = React.useState(false);
   const [voidError, setVoidError] = React.useState("");
-  const [voidQuantities, setVoidQuantities] = React.useState({});
 
 
 
@@ -113,6 +112,22 @@ export default function TransactionDetailModal({
               <span>Discount:</span>
               <span>₱ {discountAmount.toFixed(2)}</span>
             </div>
+
+            {discountDetails && (transaction.discount_type === 'senior' || transaction.discount_type === 'pwd') && (
+              <div className="border-t pt-2 mt-2 space-y-1">
+                <div className="flex justify-between">
+                  <span className="font-semibold capitalize">{transaction.discount_type} Discount:</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                    {transaction.discount_type.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Customer Name:</span>
+                  <span className="font-medium">{discountDetails.name}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between font-semibold text-lg border-t pt-2">
               <span>Total:</span>
               <span>₱ {total.toFixed(2)}</span>
@@ -136,100 +151,45 @@ export default function TransactionDetailModal({
       {/* actions area - void form */}
       {showVoidForm ? (
         <div className="space-y-4 mt-4 border-t pt-4 bg-red-50 p-4 rounded-lg">
-          <h3 className="font-semibold text-red-700 text-lg">VOID TRANSACTION</h3>
+          <h3 className="font-semibold text-red-700 text-lg">VOID ENTIRE TRANSACTION</h3>
           
           <div className="flex flex-col md:flex-row gap-6">
-            {/* Left side - Void options */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Void Type:</label>
-                <div className="space-x-6">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="radio"
-                      name="voidType"
-                      value="full"
-                      checked={voidType === 'full'}
-                      onChange={() => { setVoidType('full'); setVoidQuantities({}); }}
-                      className="mr-2"
-                    />Full Void
-                  </label>
-                  <label className="inline-flex items-center">
-                    <input
-                      type="radio"
-                      name="voidType"
-                      value="partial"
-                      checked={voidType === 'partial'}
-                      onChange={() => setVoidType('partial')}
-                      className="mr-2"
-                    />Partial Void
-                  </label>
-                </div>
+            {/* Alert message */}
+            <div className="flex-1">
+              <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded mb-4">
+                <p className="text-red-700 font-medium">⚠️ Warning</p>
+                <p className="text-red-600 text-sm mt-1">This will void the ENTIRE transaction. This action cannot be undone.</p>
               </div>
-
-              {voidType === 'partial' && (
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium">Select items to void:</label>
-                  <div className="bg-white p-3 rounded border space-y-2 text-sm max-h-64 overflow-y-auto">
-                    {remainingItems.map((it) => {
-                      const qty = voidQuantities[it.menu_id] || 0;
-                      const maxQty = it.remaining;
-                      return (
-                        <div key={it.menu_id} className="flex items-center justify-between py-2">
-                          <span className="flex-1">{it.product_name || it.menu_id} (max: {it.remaining})</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setVoidQuantities(prev => ({
-                                ...prev,
-                                [it.menu_id]: Math.max(0, qty - 1)
-                              }))}
-                              className="bg-gray-300 px-3 py-1 rounded hover:bg-gray-400 text-sm"
-                              disabled={maxQty === 0}
-                            >
-                              −
-                            </button>
-                            <span className="w-8 text-center font-medium">{qty}</span>
-                            <button
-                              onClick={() => setVoidQuantities(prev => ({
-                                ...prev,
-                                [it.menu_id]: Math.min(maxQty, qty + 1)
-                              }))}
-                              className="bg-gray-300 px-3 py-1 rounded hover:bg-gray-400 text-sm"
-                              disabled={maxQty === 0}
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
+          </div>
 
+          <div className="flex flex-col md:flex-row gap-6">
             {/* Right side - Form inputs */}
-            <div className="md:w-80 space-y-4">
+            <div className="md:w-80 space-y-4 ml-auto">
               <div>
                 <label className="block text-sm font-medium mb-2">Reason for void:</label>
-                <textarea
-                  className="w-full border rounded px-3 py-2 resize-none"
+                <select
+                  className="w-full border rounded px-3 py-2"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Enter reason for voiding..."
-                  autoComplete="off"
-                  rows="4"
-                />
+                >
+                  <option value="">-- Select a reason --</option>
+                  <option value="Spoilage">Spoilage</option>
+                  <option value="Cashier error">Cashier error</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Admin PIN:</label>
                 <input
-                  type="password"
+                  type="text"
+                  inputMode="password"
                   className="w-full border rounded px-3 py-2"
                   value={adminPin}
                   onChange={(e) => setAdminPin(e.target.value)}
                   placeholder="Enter admin PIN"
                   autoComplete="off"
+                  name="adminVerification"
+                  data-lpignore="true"
                 />
                 <p className="text-xs text-gray-500 mt-1">*Only admins can approve void*</p>
               </div>
@@ -237,7 +197,7 @@ export default function TransactionDetailModal({
               <div className="flex gap-3 pt-2">
                 <button
                   disabled={submittingVoid}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg disabled:opacity-50"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg disabled:opacity-50"
                   onClick={async () => {
                     if (!reason.trim() || !adminPin.trim()) {
                       setVoidError("Reason and PIN are required");
@@ -251,9 +211,6 @@ export default function TransactionDetailModal({
                         reason,
                         admin_pin: adminPin,
                       };
-                      if (voidType === 'partial') {
-                        body.void_items = voidQuantities; // {menu_id:qty}
-                      }
                       const res = await fetch(`${API_BASE_URL}/api/pos/void`, {
                         method: "POST",
                         headers: {

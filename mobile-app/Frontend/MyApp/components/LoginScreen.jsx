@@ -21,79 +21,84 @@ export default function LoginScreen({
 
   const handleForgotPassword = async (data) => {
     // this handler is invoked by <ForgotPasswordForm> when the user clicks
-    // "Next" on each step. onSubmit receives an object containing whatever
-    // fields have been filled so far:
-    //   { email }               -> step 1
-    //   { email, verificationCode } -> step 2
-    //   { email, verificationCode, newPassword } -> step 3 (final)
+    // "Next" on each step. onSubmit receives an object containing:
+    //   { endpoint, data } where endpoint is 'send-otp', 'verify-otp', or 'reset-password'
     setLoading(true);
+    console.log('handleForgotPassword called with:', data);
 
     try {
-      const { username, verificationCode, newPassword } = data;
+      const { endpoint, data: requestData } = data;
 
-      // NOTE: the backend endpoints used below do not exist yet in the repo;
-      // you'll need to implement them (example names shown).  Adjust paths
-      // as necessary based on your API design.
+      // Base API URL - adjust as needed
+      const baseUrl = 'https://deployment-backend-repo-production.up.railway.app/api/auth';
 
-      if (!verificationCode) {
-        // step 1: request a reset code be emailed
-        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/start', {
+      if (endpoint === 'send-otp') {
+        console.log('Sending OTP request to:', `${baseUrl}/send-otp`, 'with data:', requestData);
+        // Step 1: Send OTP to email
+        const resp = await fetch(`${baseUrl}/send-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
+          body: JSON.stringify(requestData)
         });
+        console.log('OTP send response status:', resp.status);
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          throw new Error(err.message || `Request failed (status ${resp.status})`);
+          console.error('OTP send error:', err);
+          throw new Error(err.error || `Request failed (status ${resp.status})`);
         }
         const body = await resp.json().catch(() => ({}));
-        
-        // Check if the username/role is valid before proceeding
-        if (!body.isValid) {
-          throw new Error('Invalid credentials');
-        }
-        
-        // clear any previous token
-        setResetToken(null);
-        Alert.alert('Proceed', 'Username and role matched. You may now enter the master recovery PIN.');
+        console.log('OTP send success:', body);
+        Alert.alert('OTP Sent', 'Please check your email for the 6-digit OTP code.');
         return body;
-      } else if (!newPassword) {
-        // step 2: verify the code
-        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/verify-pin', {
+      } else if (endpoint === 'verify-otp') {
+        // Step 2: Verify OTP code
+        const resp = await fetch(`${baseUrl}/verify-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, pin: verificationCode })
+          body: JSON.stringify(requestData)
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          throw new Error(err.message || `Code verification failed (status ${resp.status})`);
+          throw new Error(err.error || `OTP verification failed (status ${resp.status})`);
         }
-        // read token from response and keep in memory (frontend-only)
         const body = await resp.json().catch(() => ({}));
-        if (body && body.token) {
-          setResetToken(body.token);
-          Alert.alert('Code Verified', 'You may now enter a new password.');
+        if (body.verified) {
+          Alert.alert('OTP Verified', 'You may now enter a new password.');
         } else {
-          // generic failure (do not reveal details)
-          throw new Error('Invalid credentials');
+          throw new Error('Invalid OTP code');
         }
         return body;
-      } else {
-        // step 3: submit new password
-        const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/recovery/reset', {
+      } else if (endpoint === 'reset-password') {
+        // Step 3: Reset password
+        const resp = await fetch(`${baseUrl}/reset-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, token: resetToken, newPassword })
+          body: JSON.stringify(requestData)
         });
         if (!resp.ok) {
           const err = await resp.json().catch(() => ({}));
-          throw new Error(err.message || `Reset failed (status ${resp.status})`);
+          throw new Error(err.error || `Password reset failed (status ${resp.status})`);
         }
         const body = await resp.json().catch(() => ({}));
-        Alert.alert('Success', 'Your password has been reset. You can now log in.');
+        Alert.alert('Success', 'Your password has been reset successfully. You can now log in.');
         setShowForgotPassword(false);
         return body;
+      } else if (endpoint === 'resend-otp') {
+        // Handle resend OTP
+        const resp = await fetch(`${baseUrl}/resend-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || `Resend failed (status ${resp.status})`);
+        }
+        const body = await resp.json().catch(() => ({}));
+        return body;
       }
+
+      throw new Error('Unknown endpoint');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to reset password.';
       Alert.alert('Error', message);

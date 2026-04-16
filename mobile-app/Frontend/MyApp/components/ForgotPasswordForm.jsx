@@ -18,8 +18,9 @@ export default function ForgotPasswordForm({
   onSubmit,
   loading = false,
 }) {
-  const [step, setStep] = useState(1); // 1: username, 2: verification code, 3: new password
+  const [step, setStep] = useState(1); // 1: username + email, 2: OTP code, 3: new password
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,14 +28,17 @@ export default function ForgotPasswordForm({
   const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateStep = () => {
     const e = {};
     if (step === 1) {
       if (!username.trim()) e.username = 'Username is required';
+      if (!email.trim()) e.email = 'Email is required';
+      if (email && !/\S+@\S+\.\S+/.test(email)) e.email = 'Please enter a valid email';
     } else if (step === 2) {
-      if (!verificationCode.trim()) e.verificationCode = 'Verification code is required';
-      if (verificationCode.length < 8) e.verificationCode = 'Verification code must be 8 digits';
+      if (!verificationCode.trim()) e.verificationCode = 'OTP code is required';
+      if (verificationCode.length !== 6) e.verificationCode = 'OTP code must be 6 digits';
     } else if (step === 3) {
       if (!newPassword) e.newPassword = 'New password is required';
       if (newPassword.length < 6) e.newPassword = 'Password must be at least 6 characters';
@@ -52,38 +56,53 @@ export default function ForgotPasswordForm({
     }
     setErrors({});
 
+    setIsSubmitting(true);
     try {
       if (step === 1) {
-        // start recovery; check if username is valid before advancing
-        const result = await onSubmit({ username: username.trim() });
-        // Only advance if backend confirms username exists and is superadmin
-        if (result && result.isValid === true) {
-          setStep(2);
-        } else {
-          // If isValid is false or missing, don't advance
-          throw new Error('Invalid credentials');
-        }
+        // Send OTP to email
+        await onSubmit({
+          endpoint: 'send-otp',
+          data: { username: username.trim(), email: email.trim() }
+        });
+        setStep(2);
         return;
       }
 
       if (step === 2) {
-        // verify PIN; parent should return { token } on success
-        const result = await onSubmit({ username: username.trim(), verificationCode: verificationCode.trim() });
-        if (result && result.token) {
+        // Verify OTP code
+        const result = await onSubmit({
+          endpoint: 'verify-otp',
+          data: {
+            username: username.trim(),
+            email: email.trim(),
+            code: verificationCode.trim()
+          }
+        });
+        if (result && result.verified === true) {
           setStep(3);
         } else {
-          throw new Error('Invalid credentials');
+          throw new Error('Invalid OTP code');
         }
         return;
       }
 
-      // step === 3: perform reset
-      await onSubmit({ username: username.trim(), verificationCode: verificationCode.trim(), newPassword });
+      // step === 3: reset password
+      await onSubmit({
+        endpoint: 'reset-password',
+        data: {
+          username: username.trim(),
+          email: email.trim(),
+          code: verificationCode.trim(),
+          newPassword
+        }
+      });
       setSubmitted(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Request failed';
       Alert.alert('Error', message);
       // keep the user on the same step
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -119,6 +138,7 @@ export default function ForgotPasswordForm({
             onPress={() => {
               setSubmitted(false);
               setUsername('');
+              setEmail('');
               setVerificationCode('');
               setNewPassword('');
               setConfirmPassword('');
@@ -137,7 +157,7 @@ export default function ForgotPasswordForm({
       case 1:
         return 'Reset Password';
       case 2:
-        return 'Recovery PIN';
+        return 'Enter OTP Code';
       case 3:
         return 'New Password';
       default:
@@ -148,9 +168,9 @@ export default function ForgotPasswordForm({
   const getStepSubtitle = () => {
     switch (step) {
       case 1:
-        return 'Enter your username';
+        return 'Enter your username and email address';
       case 2:
-        return 'Enter the 8-digit recovery PIN for your account';
+        return 'Enter the 6-digit OTP code sent to your email';
       case 3:
         return 'Create a new password';
       default:
@@ -185,35 +205,62 @@ export default function ForgotPasswordForm({
 
         <Text style={styles.subheading}>{getStepSubtitle()}</Text>
 
-        {/* Step 1: Username */}
+        {/* Step 1: Username and Email */}
         {step === 1 && (
-          <AppTextInput
-            label="Username"
-            placeholder="Enter your username"
-            value={username}
-            onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
-            error={errors.username}
-            autoCapitalize="none"
-            returnKeyType="next"
-          />
+          <>
+            <AppTextInput
+              label="Username"
+              placeholder="Enter your username"
+              value={username}
+              onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
+              error={errors.username}
+              autoCapitalize="none"
+              returnKeyType="next"
+            />
+            <AppTextInput
+              label="Email"
+              placeholder="Enter your email address"
+              value={email}
+              onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
+              error={errors.email}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="done"
+              onSubmitEditing={handleNext}
+            />
+          </>
         )}
 
-        {/* Step 2: Verification Code */}
+        {/* Step 2: OTP Code */}
         {step === 2 && (
           <View>
             <AppTextInput
-              label="Master Recovery PIN"
-              placeholder="Enter 8-digit pin"
+              label="OTP Code"
+              placeholder="Enter 6-digit code"
               value={verificationCode}
               onChangeText={(t) => { setVerificationCode(t); setErrors(e => ({ ...e, verificationCode: undefined })); }}
               error={errors.verificationCode}
               keyboardType="number-pad"
-              maxLength={8}
-              returnKeyType="next"
+              maxLength={6}
+              returnKeyType="done"
+              onSubmitEditing={handleNext}
             />
             <Text style={styles.helperText}>
               Didn't receive the code?{' '}
-              <Text style={styles.helperLink} onPress={() => console.log('Resend code')}>
+              <Text
+                style={[styles.helperLink, (loading || isSubmitting) && styles.disabledLink]}
+                onPress={(loading || isSubmitting) ? undefined : async () => {
+                  try {
+                    await onSubmit({
+                      endpoint: 'resend-otp',
+                      data: { username: username.trim(), email: email.trim() }
+                    });
+                    Alert.alert('Success', 'OTP code resent to your email');
+                  } catch (err) {
+                    Alert.alert('Error', 'Failed to resend OTP code');
+                  }
+                }}
+              >
                 Resend
               </Text>
             </Text>
@@ -252,7 +299,7 @@ export default function ForgotPasswordForm({
         <PrimaryButton
           title={getButtonLabel()}
           onPress={handleNext}
-          loading={loading}
+          loading={loading || isSubmitting}
           style={styles.submitBtn}
         />
 
@@ -362,6 +409,9 @@ const styles = StyleSheet.create({
   helperLink: {
     color: Colors.primaryGreen,
     fontWeight: '600',
+  },
+  disabledLink: {
+    color: Colors.textMuted,
   },
   stepBubbleContainer: {
     flexDirection: 'row',

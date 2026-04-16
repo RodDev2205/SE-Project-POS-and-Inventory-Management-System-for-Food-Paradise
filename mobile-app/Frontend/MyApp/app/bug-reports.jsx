@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { StatusBar as RNStatusBar } from 'react-native';
 import {
   View,
@@ -14,57 +14,66 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
+import { NotificationContext } from '@/context/NotificationContext';
 
 export default function BugReportsScreen() {
   const router = useRouter();
-  const [bugReport, setBugReport] = useState('');
-  const [feedback, setFeedback] = useState('');
-  const [loadingBug, setLoadingBug] = useState(false);
-  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const { auth } = useContext(NotificationContext);
+  const [reportType, setReportType] = useState('bug');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleGoBack = () => {
     router.back();
   };
 
-  const handleSubmitBugReport = async () => {
-    if (!bugReport.trim()) {
-      Alert.alert('Error', 'Please enter your bug report');
+  const handleSubmit = async () => {
+    if (!message.trim()) {
+      Alert.alert('Error', 'Please enter your message');
       return;
     }
 
-    setLoadingBug(true);
+    setLoading(true);
     try {
-      // TODO: Replace with your real API call to submit bug report
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      console.log('Bug report submitted:', bugReport);
-      Alert.alert('Success', 'Thank you! Your bug report has been submitted.');
-      setBugReport('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to submit bug report.';
-      Alert.alert('Error', message);
-    } finally {
-      setLoadingBug(false);
-    }
-  };
+      const token = auth.token;
+      const user_id = auth.user?.user_id;
+      if (!token || !user_id) {
+        Alert.alert('Error', 'Please log in first');
+        return;
+      }
 
-  const handleSendFeedback = async () => {
-    if (!feedback.trim()) {
-      Alert.alert('Error', 'Please enter your feedback');
-      return;
-    }
+      const feedbackData = {
+        user_id,
+        type: reportType,
+        message,
+        system_name: Platform.OS,
+      };
 
-    setLoadingFeedback(true);
-    try {
-      // TODO: Replace with your real API call to submit feedback
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      console.log('Feedback submitted:', feedback);
-      Alert.alert('Success', "Thank you! We'd love to hear your feedback.");
-      setFeedback('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to send feedback.';
-      Alert.alert('Error', message);
+      const response = await fetch('https://deployment-backend-repo-production.up.railway.app/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(feedbackData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit feedback');
+      }
+
+      const result = await response.json();
+      console.log('Feedback submitted:', result);
+
+      Alert.alert('Success', 'Thank you! Your feedback has been submitted successfully.');
+      setMessage('');
+      setReportType('bug');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      Alert.alert('Error', `Failed to send feedback: ${error.message}`);
     } finally {
-      setLoadingFeedback(false);
+      setLoading(false);
     }
   };
 
@@ -87,71 +96,60 @@ export default function BugReportsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Bug Reports Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Bug Reports</Text>
-          </View>
-          <Text style={styles.sectionSubtitle}>
-            Found bugs or errors? Please let your managers know about it.
-          </Text>
-
-          <View style={styles.card}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your report here and specify where the bug was found."
-              placeholderTextColor={Colors.inputPlaceholder}
-              value={bugReport}
-              onChangeText={setBugReport}
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-            />
-
-            <TouchableOpacity
-              style={[styles.submitBtn, loadingBug && styles.submitBtnDisabled]}
-              onPress={handleSubmitBugReport}
-              disabled={loadingBug}
-            >
-              {loadingBug ? (
-                <Text style={styles.submitBtnText}>Submitting...</Text>
-              ) : (
-                <Text style={styles.submitBtnText}>Submit bug report</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Feedback Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Got any Feedback or Suggestions?</Text>
+            <Text style={styles.sectionTitle}>Report an Issue or Send Feedback</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
-            Feedback on the systems performance is always welcomed! Let us work together to improve the systems
+            Choose the type then describe your message.
           </Text>
 
           <View style={styles.card}>
+            {/* Radio Buttons */}
+            <View style={styles.radioGroup}>
+              <TouchableOpacity
+                style={styles.radioOption}
+                onPress={() => setReportType('bug')}
+              >
+                <View style={styles.radioCircle}>
+                  {reportType === 'bug' && <View style={styles.radioSelected} />}
+                </View>
+                <Text style={styles.radioText}>Bug Report</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.radioOption}
+                onPress={() => setReportType('feedback')}
+              >
+                <View style={styles.radioCircle}>
+                  {reportType === 'feedback' && <View style={styles.radioSelected} />}
+                </View>
+                <Text style={styles.radioText}>Feedback</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Message Input */}
             <TextInput
               style={styles.textInput}
-              placeholder="Enter your feedback/suggestions here. We'd love to hear your opinion!"
+              placeholder="Enter your message here"
               placeholderTextColor={Colors.inputPlaceholder}
-              value={feedback}
-              onChangeText={setFeedback}
+              value={message}
+              onChangeText={setMessage}
               multiline
               numberOfLines={5}
               textAlignVertical="top"
             />
 
+            {/* Submit Button */}
             <TouchableOpacity
-              style={[styles.submitBtn, loadingFeedback && styles.submitBtnDisabled]}
-              onPress={handleSendFeedback}
-              disabled={loadingFeedback}
+              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
             >
-              {loadingFeedback ? (
-                <Text style={styles.submitBtnText}>Sending...</Text>
+              {loading ? (
+                <Text style={styles.submitBtnText}>Submitting...</Text>
               ) : (
-                <Text style={styles.submitBtnText}>Send us your feedback</Text>
+                <Text style={styles.submitBtnText}>Submit</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -247,6 +245,55 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: Spacing.lg,
     minHeight: 120,
+  },
+
+  // Radio Group
+  radioGroup: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.primaryGreen,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primaryGreen,
+  },
+  radioText: {
+    fontSize: FontSize.base,
+    color: Colors.textPrimary,
+  },
+
+  // Image Picker
+  imagePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  imagePickerText: {
+    fontSize: FontSize.base,
+    color: Colors.primaryGreen,
+    textDecorationLine: 'underline',
+  },
+  imageSelected: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
   },
 
   // Submit Button

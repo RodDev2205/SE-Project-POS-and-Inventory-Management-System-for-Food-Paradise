@@ -188,11 +188,6 @@ export default function AdminReportsPage() {
       subtitle: "Status: Voided"
     },
     {
-      title: "Partial Voids",
-      value: todaySales?.partial_voided_count || 0,
-      subtitle: "Status: Partial Voided"
-    },
-    {
       title: "Staff Who Voided",
       value: todaySales?.staff_who_voided_count || 0,
       subtitle: "Unique staff members"
@@ -288,12 +283,6 @@ export default function AdminReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setRefreshTrigger(prev => prev + 1)}
-            className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-xl shadow-md hover:opacity-90"
-          >
-            Refresh
-          </button>
           <button
             onClick={exportCSV}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:opacity-90"

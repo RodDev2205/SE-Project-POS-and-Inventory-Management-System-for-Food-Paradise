@@ -20,11 +20,23 @@ export default function CreateAccountScreen({
     setLoading(true);
     try {
       // Call backend signup API — mobile-created accounts are Super Admin (role_id=3)
-      const { fullName, username, password, role_id } = accountData;
+      const { firstName, lastName, username, email, password, role_id } = accountData;
+      
+      const payload = { 
+        first_name: firstName, 
+        last_name: lastName, 
+        username, 
+        email, 
+        password, 
+        role_id 
+      };
+      
+      console.log('Sending payload to backend:', payload);
+      
       const resp = await fetch('https://deployment-backend-repo-production.up.railway.app/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, username, password, role_id })
+        body: JSON.stringify(payload)
       });
 
       if (!resp.ok) {
@@ -34,7 +46,7 @@ export default function CreateAccountScreen({
 
       const body = await resp.json().catch(() => ({}));
       // Show success and display created account summary
-      setCreatedAccountData({ fullName, username, role: role_id });
+      setCreatedAccountData({ firstName, lastName, username, role: role_id });
       setAccountCreated(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create account.';

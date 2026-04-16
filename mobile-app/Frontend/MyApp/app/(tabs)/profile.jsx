@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { StatusBar as RNStatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -11,10 +12,12 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
+import EmployeeDetail from '@/components/EmployeeDetail';
 import { NotificationContext } from '@/context/NotificationContext';
 
 // dynamic data will replace the hardcoded lists
@@ -29,8 +32,24 @@ export default function EmployeesScreen() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [activeUsersExpanded, setActiveUsersExpanded] = useState(true);
+  const [deactivatedUsersExpanded, setDeactivatedUsersExpanded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { auth, notifications, toggleNotificationRead, unreadCount, handleNotificationClick, logout } = useContext(NotificationContext);
+  // Refresh staff list and reset modal states when this tab regains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchStaff(selectedBranch);
+
+      return () => {
+        setNotificationsVisible(false);
+        setShowSettingsMenu(false);
+        setShowLogoutModal(false);
+      };
+    }, [selectedBranch])
+  );
+
+  const { auth, notifications, toggleNotificationRead, markAllAsRead, toggleAllReadUnread, unreadCount, handleNotificationClick, logout } = useContext(NotificationContext);
   const router = useRouter();
 
   const fetchBranches = async () => {
@@ -112,15 +131,26 @@ export default function EmployeesScreen() {
     setShowLogoutModal(false);
   };
 
-  const getIconColor = (type) => {
-    const colorMap = {
-      order: '#10b981',
-      inventory: '#ef4444',
-      message: '#f59e0b',
-      system: '#06b6d4',
-      payment: '#10b981',
-    };
-    return colorMap[type] || '#666';
+  const handleStatusChange = (userId, newStatus) => {
+    setStaff((prevStaff) =>
+      prevStaff.map((employee) =>
+        employee.user_id === userId ? { ...employee, status: newStatus } : employee
+      )
+    );
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchBranches(),
+        fetchStaff(selectedBranch)
+      ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -156,7 +186,7 @@ export default function EmployeesScreen() {
               <View style={styles.dropdownMenu}>
                 <TouchableOpacity style={styles.menuItem} onPress={handleProfileEdit}>
                   <Ionicons name="person-outline" size={18} color={Colors.textPrimary} />
-                  <Text style={styles.menuText}>Admin</Text>
+                  <Text style={styles.menuText}>Super Admin</Text>
                 </TouchableOpacity>
                 <View style={styles.menuDivider} />
                 <TouchableOpacity style={styles.menuItem} onPress={handleBugReports}>
@@ -178,6 +208,14 @@ export default function EmployeesScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryGreen]}
+            tintColor={Colors.primaryGreen}
+          />
+        }
       >
         {/* Title */}
         <Text style={styles.pageTitle}>Employees</Text>
@@ -272,44 +310,101 @@ export default function EmployeesScreen() {
 
         {/* Users listing (active / deactivated) */}
         {loadingStaff && <ActivityIndicator size="small" color={Colors.primaryGreen} />}
-        {staff.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Active Users</Text>
-            {staff
-              .filter((u) => u.status === 'Activate' || u.status === 1)
-              .map((u) => (
-                <View key={u.user_id} style={styles.employeeRow}>
-                  <View style={styles.employeeInfo}>
-                    <View
-                      style={[styles.avatar, { backgroundColor: Colors.primaryGreen }]}
-                    />
-                    <Text style={styles.employeeName}>
-                      {u.first_name && u.last_name
-                        ? `${u.first_name} ${u.last_name}`
-                        : u.name}
-                    </Text>
-                  </View>
-                  <Text style={styles.employeeRole}>{u.role_name}</Text>
-                </View>
-              ))}
 
-            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Deactivated Users</Text>
-            {staff
-              .filter((u) => u.status === 'Deactivate' || u.status === 0)
-              .map((u) => (
-                <View key={u.user_id} style={styles.employeeRow}>
-                  <View style={styles.employeeInfo}>
-                    <View style={[styles.avatar, { backgroundColor: '#ccc' }]} />
-                    <Text style={styles.employeeName}>
-                      {u.first_name && u.last_name
-                        ? `${u.first_name} ${u.last_name}`
-                        : u.name}
-                    </Text>
-                  </View>
-                  <Text style={styles.employeeRole}>{u.role_name}</Text>
-                </View>
-              ))}
-          </>
+        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Active Users</Text>
+        <TouchableOpacity
+          style={styles.sectionToggleButton}
+          onPress={() => setActiveUsersExpanded((prev) => !prev)}
+        >
+          <Text style={styles.sectionToggleText}>
+            {activeUsersExpanded ? 'Hide' : 'Show'} Active Users
+          </Text>
+          <Ionicons
+            name={activeUsersExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={Colors.primaryGreen}
+          />
+        </TouchableOpacity>
+        {activeUsersExpanded && (
+          <View style={styles.sectionBody}>
+            {staff.filter((u) => u.status === 'Activate' || u.status === 1).length === 0 ? (
+              <Text style={styles.noUserText}>No user yet</Text>
+            ) : (
+              staff
+                .filter((u) => u.status === 'Activate' || u.status === 1)
+                .map((u) => {
+                  const userName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.name;
+                  return (
+                    <TouchableOpacity
+                      key={u.user_id}
+                      style={styles.employeeRow}
+                      onPress={() => router.push(`/employee/${u.user_id}`)}
+                    >
+                      <View style={styles.employeeInfo}>
+                        <View style={[styles.avatar, { backgroundColor: Colors.primaryGreen }]}>
+                          <Text style={styles.avatarText}>
+                            {(u.first_name || u.name || 'U').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.employeeName}>{userName}</Text>
+                          <Text style={styles.employeeRole}>{u.role_name}</Text>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={Colors.primaryGreen} />
+                    </TouchableOpacity>
+                  );
+                })
+            )}
+          </View>
+        )}
+
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Deactivated Users</Text>
+        <TouchableOpacity
+          style={styles.sectionToggleButton}
+          onPress={() => setDeactivatedUsersExpanded((prev) => !prev)}
+        >
+          <Text style={styles.sectionToggleText}>
+            {deactivatedUsersExpanded ? 'Hide' : 'Show'} Deactivated Users
+          </Text>
+          <Ionicons
+            name={deactivatedUsersExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color={Colors.primaryGreen}
+          />
+        </TouchableOpacity>
+        {deactivatedUsersExpanded && (
+          <View style={styles.sectionBody}>
+            {staff.filter((u) => u.status === 'Deactivate' || u.status === 0).length === 0 ? (
+              <Text style={styles.noUserText}>No user yet</Text>
+            ) : (
+              staff
+                .filter((u) => u.status === 'Deactivate' || u.status === 0)
+                .map((u) => {
+                  const userName = u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : u.name;
+                  return (
+                    <TouchableOpacity
+                      key={u.user_id}
+                      style={styles.employeeRow}
+                      onPress={() => router.push(`/employee/${u.user_id}`)}
+                    >
+                      <View style={styles.employeeInfo}>
+                        <View style={[styles.avatar, { backgroundColor: '#ccc' }]}>
+                          <Text style={styles.avatarText}>
+                            {(u.first_name || u.name || 'U').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.employeeName}>{userName}</Text>
+                          <Text style={styles.employeeRole}>{u.role_name}</Text>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={Colors.primaryGreen} />
+                    </TouchableOpacity>
+                  );
+                })
+            )}
+          </View>
         )}
       </ScrollView>
 
@@ -318,44 +413,60 @@ export default function EmployeesScreen() {
         <View style={styles.notificationsDropdown}>
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.readAllButton}
+                onPress={toggleAllReadUnread}
+              >
+                <Text style={styles.readAllButtonText}>
+                  {unreadCount > 0 ? 'Read All' : 'Unread All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.notificationDropdownItem,
-                  !item.read && styles.notificationDropdownItemUnread,
-                ]}
-                onPress={() => handleNotificationClick(item, router)}
-              >
-                <View
+            {notifications.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#666', textAlign: 'center' }}>
+                  No low or out of stock
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.notificationIconSmall,
-                    { backgroundColor: getIconColor(item.type) },
+                    styles.notificationDropdownItem,
+                    !item.read && styles.notificationDropdownItemUnread,
                   ]}
+                  onPress={() => handleNotificationClick(item, router)}
                 >
-                  <Ionicons name={item.icon} size={12} color="#fff" />
-                </View>
-                <View style={styles.notificationDropdownContent}>
-                  <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
-                    {item.message}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.notificationIconSmall,
+                      { backgroundColor: getIconColor(item.type) },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={12} color="#fff" />
+                  </View>
+                  <View style={styles.notificationDropdownContent}>
+                    <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
+                      {item.message}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.dropdownFooter}
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Text style={styles.dropdownFooterText}>Close</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.dropdownFooter}
+            onPress={() => setNotificationsVisible(false)}
+          >
+            <Text style={styles.dropdownFooterText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -556,6 +667,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -563,11 +675,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
   employeeName: {
     fontSize: 14,
@@ -577,6 +699,69 @@ const styles = StyleSheet.create({
   employeeRole: {
     fontSize: 13,
     color: '#666',
+  },
+  employeeRowToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+  },
+  employeeDetailsPanel: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  employeeDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  employeeDetailLabel: {
+    fontSize: 12,
+    color: '#555',
+    textTransform: 'capitalize',
+    flex: 1,
+  },
+  employeeDetailValue: {
+    fontSize: 12,
+    color: '#111',
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  sectionToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: Colors.primaryGreen,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  sectionToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primaryGreen,
+  },
+  sectionBody: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+    paddingVertical: 8,
+  },
+  noUserText: {
+    padding: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   section: {
     backgroundColor: '#fff',
@@ -827,5 +1012,16 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  readAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryGreen,
+    borderRadius: 4,
+  },
+  readAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

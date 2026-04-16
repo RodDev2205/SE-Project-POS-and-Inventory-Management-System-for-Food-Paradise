@@ -5,13 +5,24 @@ import { io } from "../../server.js"; // realtime notification
 export const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { first_name, last_name, username, password, branch_id, contact_number } = req.body;
+    const { first_name, last_name, username, password, branch_id, contact_number, old_password } = req.body;
 
-    if (!first_name || !last_name || !username || !branch_id) {
+    if (!first_name || !last_name || !username) {
       return res.status(400).json({
-        error: "First name, last name, username, and branch are required",
+        error: "First name, last name, and username are required",
       });
     }
+
+    const [currentRows] = await db.query(
+      "SELECT branch_id FROM users WHERE user_id = ?",
+      [userId]
+    );
+
+    if (currentRows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const finalBranchId = branch_id || currentRows[0].branch_id;
 
     // ✅ Check if username already taken by another user
     const [existing] = await db.query(
@@ -25,27 +36,39 @@ export const updateUser = async (req, res) => {
 
     let hashedPassword = null;
     if (password) {
+      if (!old_password) {
+        return res.status(400).json({ error: "Old password is required to change password" });
+      }
+      // Get current password for verification
+      const [currentUser] = await db.query("SELECT password FROM users WHERE user_id = ?", [userId]);
+      if (currentUser.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const match = await bcrypt.compare(old_password, currentUser[0].password);
+      if (!match) {
+        return res.status(400).json({ error: "Old password is incorrect" });
+      }
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
     let sql;
     let params;
 
-    // always update first_name, last_name, username, branch_id
+    // always update first_name, last_name, username, branch_id, contact_number
     if (hashedPassword) {
       sql = `
         UPDATE users 
         SET first_name = ?, last_name = ?, username = ?, password = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, hashedPassword, branch_id, contact_number || null, userId];
+      params = [first_name, last_name, username, hashedPassword, finalBranchId, contact_number || null, userId];
     } else {
       sql = `
         UPDATE users 
         SET first_name = ?, last_name = ?, username = ?, branch_id = ?, contact_number = ?
         WHERE user_id = ?
       `;
-      params = [first_name, last_name, username, branch_id, contact_number || null, userId];
+      params = [first_name, last_name, username, finalBranchId, contact_number || null, userId];
     }
 
     const [result] = await db.query(sql, params);
@@ -101,24 +124,79 @@ export const getUser = async (req, res) => {
 
 export const getCurrentUser = async (req, res) => {
   try {
-    const userId = req.user.user_id;
-    const [rows] = await db.query(
-      `
-      SELECT u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name,
-             u.branch_id, u.status, u.created_at
+    const userId = req.user?.user_id;
+    const username = req.user?.username;
+    console.log('getCurrentUser called with user_id:', userId, 'username:', username);
+    console.log('req.user object:', req.user);
+
+    const selectFields = req.user?.role_id === 3
+      ? `u.user_id, u.first_name, u.last_name, u.username, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`
+      : `u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name, u.branch_id, u.status, u.created_at`;
+
+    let query = `
+      SELECT ${selectFields}
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.role_id
       WHERE u.user_id = ?
-      `,
-      [userId]
-    );
+      `;
+    let params = [userId];
+
+    if (!userId && username) {
+      query = `
+        SELECT ${selectFields}
+        FROM users u
+        LEFT JOIN roles r ON u.role_id = r.role_id
+        WHERE u.username = ?
+      `;
+      params = [username];
+    }
+
+    const [rows] = await db.query(query, params);
+
+    if (rows.length === 0 && username && userId) {
+      // fallback to username if user_id fails for some reason
+      console.log('Fallback search by username because user_id query returned no rows');
+      const [fallbackRows] = await db.query(
+        `
+          SELECT u.user_id, u.first_name, u.last_name, u.username, u.email, u.contact_number, u.role_id, r.role_name,
+                 u.branch_id, u.status, u.created_at
+          FROM users u
+          LEFT JOIN roles r ON u.role_id = r.role_id
+          WHERE u.username = ?
+        `,
+        [username]
+      );
+      if (fallbackRows.length > 0) {
+        console.log('Returning fallback user data by username:', fallbackRows[0]);
+        return res.json(fallbackRows[0]);
+      }
+    }
+
+    console.log('Query result rows count:', rows.length);
+
     if (rows.length === 0) {
+      console.log('No user found with user_id:', userId, 'or username:', username);
       return res.status(404).json({ error: 'User not found' });
     }
+
+    console.log('Returning user data:', rows[0]);
     res.json(rows[0]);
   } catch (err) {
     console.error('getCurrentUser error', err);
     res.status(500).json({ error: 'Failed to fetch current user', details: err.message });
+  }
+};
+
+export const updateCurrentUser = async (req, res) => {
+  try {
+    req.params.id = String(req.user.user_id);
+    req.body.password = req.body.password ?? req.body.new_password;
+    req.body.old_password = req.body.old_password ?? req.body.current_password;
+    delete req.body.branch_id; // users cannot change branch via profile update
+    return await updateUser(req, res);
+  } catch (err) {
+    console.error('updateCurrentUser error', err);
+    res.status(500).json({ error: 'Failed to update profile', details: err.message });
   }
 };
 

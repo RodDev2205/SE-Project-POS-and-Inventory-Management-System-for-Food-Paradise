@@ -14,7 +14,13 @@
     },
 
     "android": {
-      "package": "com.rodignacio.posinventorysystem"
+      "package": "com.rodignacio.posinventorysystem",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MANAGE_EXTERNAL_STORAGE"
+      ]
     },
 
     "web": {
@@ -35,7 +41,18 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-file-system",
+      "expo-document-picker",
+      "expo-image-picker"
     ],
 
     "experiments": {
@@ -47,7 +64,9 @@
       "router": {},
       "eas": {
         "projectId": "aa6ce152-0c34-44c4-aa2d-95e573acf904"
-      }
+      },
+      "supabaseUrl": "https://kimeeisrrxelwmssscip.supabase.co",
+      "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpbWVlaXNycnhlbHdtc3NzY2lwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMzYzMjksImV4cCI6MjA4OTkxMjMyOX0.zrLtZjlA1sC2vQ5czpnTr2Dum8OjsJfW8hSn8n1jSFI"
     }
   }
 }

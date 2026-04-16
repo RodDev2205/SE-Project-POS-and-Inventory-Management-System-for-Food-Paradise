@@ -10,8 +10,10 @@ import {
   StatusBar,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import FoodParadiseLogo from '@/components/FoodParadiselogo';
@@ -32,9 +34,23 @@ export default function InventoryStatusScreen() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Reset modal states when tab loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // This runs when the screen loses focus
+        setNotificationsVisible(false);
+        setShowSettingsMenu(false);
+        setShowLogoutModal(false);
+      };
+    }, [])
+  );
+
   const socketRef = useRef(null);
   const selectedBranchRef = useRef(null);
-  const { notifications, toggleNotificationRead, unreadCount, auth, addNotification, handleNotificationClick, logout } = useContext(NotificationContext);
+  const { notifications, toggleNotificationRead, markAllAsRead, toggleAllReadUnread, unreadCount, auth, addNotification, handleNotificationClick, logout } = useContext(NotificationContext);
 
   const handleNotifications = () => {
     setShowSettingsMenu(false);
@@ -212,6 +228,20 @@ export default function InventoryStatusScreen() {
     return colorMap[type] || '#666';
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchBranches(),
+        selectedBranch ? fetchInventoryForBranch(selectedBranch) : Promise.resolve()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing inventory data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryGreen} />
@@ -241,7 +271,7 @@ export default function InventoryStatusScreen() {
               <View style={styles.dropdownMenu}>
                 <TouchableOpacity style={styles.menuItem} onPress={handleProfileEdit}>
                   <Ionicons name="person-outline" size={18} color={Colors.textPrimary} />
-                  <Text style={styles.menuText}>Admin</Text>
+                  <Text style={styles.menuText}>Super Admin</Text>
                 </TouchableOpacity>
                 <View style={styles.menuDivider} />
                 <TouchableOpacity style={styles.menuItem} onPress={handleBugReports}>
@@ -263,6 +293,14 @@ export default function InventoryStatusScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryGreen]}
+            tintColor={Colors.primaryGreen}
+          />
+        }
       >
         {/* Title */}
         <Text style={styles.pageTitle}>Inventory Status</Text>
@@ -412,44 +450,60 @@ export default function InventoryStatusScreen() {
         <View style={styles.notificationsDropdown}>
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.readAllButton}
+                onPress={toggleAllReadUnread}
+              >
+                <Text style={styles.readAllButtonText}>
+                  {unreadCount > 0 ? 'Read All' : 'Unread All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.notificationDropdownItem,
-                  !item.read && styles.notificationDropdownItemUnread,
-                ]}
-                onPress={() => handleNotificationClick(item, router)}
-              >
-                <View
+            {notifications.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#666', textAlign: 'center' }}>
+                  No low or out of stock
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.notificationIconSmall,
-                    { backgroundColor: getIconColor(item.type) },
+                    styles.notificationDropdownItem,
+                    !item.read && styles.notificationDropdownItemUnread,
                   ]}
+                  onPress={() => handleNotificationClick(item, router)}
                 >
-                  <Ionicons name={item.icon} size={12} color="#fff" />
-                </View>
-                <View style={styles.notificationDropdownContent}>
-                  <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
-                    {item.message}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.notificationIconSmall,
+                      { backgroundColor: getIconColor(item.type) },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={12} color="#fff" />
+                  </View>
+                  <View style={styles.notificationDropdownContent}>
+                    <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
+                      {item.message}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.dropdownFooter}
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Text style={styles.dropdownFooterText}>Close</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.dropdownFooter}
+            onPress={() => setNotificationsVisible(false)}
+          >
+            <Text style={styles.dropdownFooterText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -940,5 +994,16 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  readAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryGreen,
+    borderRadius: 4,
+  },
+  readAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

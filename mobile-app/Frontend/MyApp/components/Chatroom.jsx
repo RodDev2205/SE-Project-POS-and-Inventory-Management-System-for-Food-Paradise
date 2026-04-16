@@ -18,8 +18,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as MediaLibrary from 'expo-media-library';
 import { Colors } from '@/constants/theme';
 import { NotificationContext } from '@/context/NotificationContext';
 import { io } from 'socket.io-client';
@@ -39,6 +40,36 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
   const socketRef = useRef(null);
   const scrollViewRef = useRef(null);
   const currentUserRef = useRef(null);
+
+  // Request necessary permissions for file operations
+  const requestPermissions = async () => {
+    try {
+      // Request media library permissions for image picking
+      const mediaLibraryPermission = await MediaLibrary.requestPermissionsAsync();
+      if (mediaLibraryPermission.status !== 'granted') {
+        Alert.alert('Permission needed', 'Media library access is required to pick images');
+        return false;
+      }
+
+      // Request camera permissions for image picking
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraPermission.status !== 'granted') {
+        console.log('Camera permission not granted, but continuing with gallery access');
+      }
+
+      // Request media library permissions for reading images
+      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (mediaPermission.status !== 'granted') {
+        Alert.alert('Permission needed', 'Media library access is required to pick images');
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
+      return false;
+    }
+  };
 
   // Log when messages change and notify parent of latest message
   useEffect(() => {
@@ -101,7 +132,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
             }),
             messageType: msg.message_type,
             attachmentUrl: msg.attachment_url,
-            attachmentName: msg.attachment_name,
+            attachmentName: msg.attachment_name || getFileNameFromUrl(msg.attachment_url) || 'File',
           };
         });
         
@@ -152,7 +183,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
             }),
             messageType: data.message_type,
             attachmentUrl: data.attachment_url,
-            attachmentName: data.attachment_name,
+            attachmentName: data.attachment_name || getFileNameFromUrl(data.attachment_url) || 'File',
           };
           setMessages((prev) => {
             const updated = [...prev, newMessage];
@@ -285,54 +316,70 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
   };
 
   const downloadAndOpenFile = async (fileUrl, fileName) => {
+    const url = fileUrl?.startsWith('http') ? fileUrl : `https://deployment-backend-repo-production.up.railway.app${fileUrl}`;
+    const displayName = fileName || getFileNameFromUrl(fileUrl) || 'File';
+
+    if (!url) {
+      Alert.alert('Download Error', 'Unable to determine file URL');
+      return;
+    }
+
     try {
-      const fileExtension = fileName.split('.').pop();
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        console.log('Opening file URL in browser:', url);
+        await Linking.openURL(url);
+        return;
+      }
+    } catch (openError) {
+      console.warn('Opening file URL failed, falling back to download:', openError);
+    }
+
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    try {
+      const fileExtension = displayName.split('.').pop();
       const mimeType = getMimeType(fileExtension);
-      
-      // Get the Documents directory path
-      let dirPath = FileSystem.documentDirectory || FileSystem.DocumentDirectoryPath;
-      
+      let dirPath = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      console.log('FileSystem paths:', {
+        documentDirectory: FileSystem.documentDirectory,
+        cacheDirectory: FileSystem.cacheDirectory,
+      });
+
       if (!dirPath) {
         Alert.alert('Error', 'Unable to access device storage');
         return;
       }
 
-      // Ensure dirPath ends with a slash
-      if (!dirPath.endsWith('/')) {
-        dirPath = dirPath + '/';
+      const dirInfo = await FileSystem.getInfoAsync(dirPath);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
       }
 
-      // Create a sanitized filename
-      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const downloadPath = `${dirPath}${sanitizedFileName}`;
-      
-      console.log('Documents directory:', dirPath);
-      console.log('Downloading file to:', downloadPath);
-      console.log('File URL:', `https://deployment-backend-repo-production.up.railway.app${fileUrl}`);
+      if (!dirPath.endsWith('/')) {
+        dirPath = `${dirPath}/`;
+      }
 
-      const { uri } = await FileSystem.downloadAsync(
-        `https://deployment-backend-repo-production.up.railway.app${fileUrl}`,
-        downloadPath
-      );
-      
+      const sanitizedFileName = displayName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const downloadPath = `${dirPath}${sanitizedFileName}`;
+
+      console.log('Downloading file to:', downloadPath);
+      const { uri } = await FileSystem.downloadAsync(url, downloadPath);
       console.log('File downloaded to:', uri);
-      
-      // Try to open file with appropriate app
+
       if (Platform.OS === 'android') {
         try {
           await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
             data: uri,
             flags: 1,
+            type: mimeType,
           });
         } catch (e) {
-          // Fallback: just alert the user where file was saved
           console.log('Could not open file, showing alert instead');
-          Alert.alert('File Downloaded', `File saved to: ${sanitizedFileName}`, [
-            { text: 'OK', onPress: () => {} }
-          ]);
+          Alert.alert('File Downloaded', `File saved to: ${sanitizedFileName}`);
         }
       } else {
-        // iOS: just save the file (user can access via Files app)
         Alert.alert('File Downloaded', `File saved as: ${sanitizedFileName}`);
       }
     } catch (error) {
@@ -369,10 +416,20 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
     return mimeTypes[extension?.toLowerCase()] || 'application/octet-stream';
   };
 
+  const getFileNameFromUrl = (url) => {
+    if (!url) return null;
+    const cleanUrl = url.split('?')[0];
+    const segments = cleanUrl.split('/');
+    return segments[segments.length - 1] || null;
+  };
+
   const handlePickImage = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: [ImagePicker.MediaType.Image],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
       });
@@ -389,9 +446,18 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
   };
 
   const handlePickDocument = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ],
       });
 
       console.log('Document picker result:', result);
@@ -576,7 +642,7 @@ export default function Chatroom({ branchName, branchId, onClose, isOnline = tru
             </TouchableOpacity>
             <TouchableOpacity style={styles.attachmentItem} onPress={handlePickDocument}>
               <Ionicons name="document-outline" size={18} color="#3b82f6" />
-              <Text style={styles.attachmentItemText}>Document</Text>
+              <Text style={styles.attachmentItemText}>Files</Text>
             </TouchableOpacity>
           </View>
         )}

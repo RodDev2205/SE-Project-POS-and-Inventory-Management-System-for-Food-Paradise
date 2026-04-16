@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { StatusBar as RNStatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -12,6 +13,7 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
@@ -33,6 +35,19 @@ export default function ReportsScreen() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Reset modal states when tab loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // This runs when the screen loses focus
+        setNotificationsVisible(false);
+        setShowSettingsMenu(false);
+        setShowLogoutModal(false);
+      };
+    }, [])
+  );
   const [summary, setSummary] = useState({
     total_sales: 0,
     transaction_count: 0,
@@ -40,7 +55,7 @@ export default function ReportsScreen() {
     refunded_count: 0,
     voided_count: 0,
   });
-  const { notifications, toggleNotificationRead, unreadCount, auth, logout } = useContext(NotificationContext);
+  const { notifications, toggleNotificationRead, markAllAsRead, toggleAllReadUnread, unreadCount, auth, logout } = useContext(NotificationContext);
   const router = useRouter();
 
   const TIME_RANGE_OPTIONS = [
@@ -249,6 +264,19 @@ export default function ReportsScreen() {
     return colorMap[type] || '#666';
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      // Refresh branches and trigger chart data refresh
+      await fetchBranches();
+      // The chart data will be refreshed automatically due to useEffect dependency on selectedBranch
+    } catch (error) {
+      console.error('Error refreshing activity data:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primaryGreen} />
@@ -278,7 +306,7 @@ export default function ReportsScreen() {
               <View style={styles.dropdownMenu}>
                 <TouchableOpacity style={styles.menuItem} onPress={handleProfileEdit}>
                   <Ionicons name="person-outline" size={18} color={Colors.textPrimary} />
-                  <Text style={styles.menuText}>Admin</Text>
+                  <Text style={styles.menuText}>Super Admin</Text>
                 </TouchableOpacity>
                 <View style={styles.menuDivider} />
                 <TouchableOpacity style={styles.menuItem} onPress={handleBugReports}>
@@ -300,6 +328,14 @@ export default function ReportsScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryGreen]}
+            tintColor={Colors.primaryGreen}
+          />
+        }
       >
         {/* Title */}
         <Text style={styles.pageTitle}>Reports</Text>
@@ -447,44 +483,60 @@ export default function ReportsScreen() {
         <View style={styles.notificationsDropdown}>
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.readAllButton}
+                onPress={toggleAllReadUnread}
+              >
+                <Text style={styles.readAllButtonText}>
+                  {unreadCount > 0 ? 'Read All' : 'Unread All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.notificationDropdownItem,
-                  !item.read && styles.notificationDropdownItemUnread,
-                ]}
-                onPress={() => toggleNotificationRead(item.id)}
-              >
-                <View
+            {notifications.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#666', textAlign: 'center' }}>
+                  No low or out of stock
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.notificationIconSmall,
-                    { backgroundColor: getIconColor(item.type) },
+                    styles.notificationDropdownItem,
+                    !item.read && styles.notificationDropdownItemUnread,
                   ]}
+                  onPress={() => toggleNotificationRead(item.id)}
                 >
-                  <Ionicons name={item.icon} size={12} color="#fff" />
-                </View>
-                <View style={styles.notificationDropdownContent}>
-                  <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
-                    {item.message}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.notificationIconSmall,
+                      { backgroundColor: getIconColor(item.type) },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={12} color="#fff" />
+                  </View>
+                  <View style={styles.notificationDropdownContent}>
+                    <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
+                      {item.message}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.dropdownFooter}
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Text style={styles.dropdownFooterText}>Close</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.dropdownFooter}
+            onPress={() => setNotificationsVisible(false)}
+          >
+            <Text style={styles.dropdownFooterText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -958,5 +1010,16 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  readAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryGreen,
+    borderRadius: 4,
+  },
+  readAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

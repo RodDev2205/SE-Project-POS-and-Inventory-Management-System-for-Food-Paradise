@@ -6,6 +6,7 @@ export default function MenuListTab() {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -86,6 +87,13 @@ export default function MenuListTab() {
       await fetchProducts();
       setSelectedProduct(null);
       setNote("");
+
+      // Show success alert
+      if (status === "APPROVED") {
+        success("Success", "Menu item approved successfully!");
+      } else if (status === "DECLINED") {
+        success("Success", "Menu item declined successfully!");
+      }
     } catch (err) {
       console.error("Failed to update status:", err);
     } finally {
@@ -104,8 +112,15 @@ export default function MenuListTab() {
       statusFilter === "all" ||
       statusLower === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    const matchesCategory =
+      categoryFilter === "all" ||
+      (item.category_name && item.category_name.toLowerCase() === categoryFilter.toLowerCase());
+
+    return matchesSearch && matchesStatus && matchesCategory;
   });
+
+  // Get unique categories
+  const categories = ["all", ...new Set(products.map(p => p.category_name).filter(Boolean))];
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const start = (page - 1) * ITEMS_PER_PAGE;
@@ -114,6 +129,7 @@ export default function MenuListTab() {
   const handleClear = () => {
     setSearch("");
     setStatusFilter("all");
+    setCategoryFilter("all");
     setPage(1);
   };
 
@@ -166,6 +182,24 @@ export default function MenuListTab() {
             <option value="approved">Approved</option>
             <option value="pending">Pending</option>
             <option value="declined">Declined</option>
+          </select>
+
+          <select
+            value={categoryFilter}
+            onChange={(e) => {
+              setPage(1);
+              setCategoryFilter(e.target.value);
+            }}
+            className="border px-4 py-2 rounded-lg"
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat) => (
+              cat !== "all" && (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              )
+            ))}
           </select>
 
           <button
@@ -238,9 +272,12 @@ export default function MenuListTab() {
             <h3 className="font-semibold">{item.product_name}</h3>
             <p className="text-sm text-gray-500">{item.category_name}</p>
             <p className="text-sm font-medium mt-1">₱ {item.price}</p>
+            <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold mt-2 ${item.vat_type === 'non-vat' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+              {item.vat_type === 'non-vat' ? 'Non-VATable' : 'VATable'}
+            </span>
 
             <p
-              className={`text-sm font-medium mt-2 ${
+              className={`text-sm font-medium mt-3 ${
                 item.approval_status === "APPROVED"
                   ? "text-green-600"
                   : item.approval_status === "PENDING"
@@ -313,6 +350,12 @@ export default function MenuListTab() {
                   <p>
                     <span className="font-medium text-gray-800">Branch:</span>{" "}
                     {selectedProduct.branch_name}
+                  </p>
+                  <p>
+                    <span className="font-medium text-gray-800">VAT Type:</span>{" "}
+                    <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-semibold ${selectedProduct.vat_type === 'non-vat' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {selectedProduct.vat_type === 'non-vat' ? 'Non-VATable' : 'VATable'}
+                    </span>
                   </p>
                   {selectedProduct.reviewed_at && (
                     <p>

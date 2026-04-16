@@ -138,19 +138,23 @@ export default function Records () {
     }
 
     return (
-        <div className="flex-1 bg-white rounded-lg p-8 shadow-lg">
+        <div className="flex-1 h-full overflow-y-auto bg-white rounded-lg p-8 shadow-lg">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Transaction Records</h2>
                 <input
-                    type="text"
+                    type="search"
                     placeholder="Search by number or time..."
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
                     className="border border-gray-300 rounded-lg px-4 py-2 w-64 focus:outline-none focus:ring focus:border-blue-300"
+                    autoComplete="off"
+                    name="searchQuery"
+                    data-lpignore="true"
+                    data-form-type="other"
                 />
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
                 <table className="w-full table-auto">
                     <thead>
                         <tr className="bg-gray-200 text-left text-sm text-gray-600 uppercase sticky top-0">

@@ -26,6 +26,7 @@ export default function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [role, setRole] = useState('Super Admin');
@@ -40,14 +41,19 @@ export default function ProfileScreen() {
     if (!auth?.token) return;
     const load = async () => {
       try {
+        console.log('Profile screen auth.token:', auth.token);
+        console.log('Profile screen auth.user:', auth.user);
         const res = await fetch(
           `https://deployment-backend-repo-production.up.railway.app/api/users/user/me`,
           { headers: { Authorization: `Bearer ${auth.token}` } }
         );
+        console.log('Profile API response status:', res.status);
         if (res.ok) {
           const data = await res.json();
+          console.log('Profile API response data:', data);
           setFirstName(data.first_name || '');
           setLastName(data.last_name || '');
+          setEmail(data.email || '');
           setUsername(data.username || '');
           setContactNumber(data.contact_number || '');
           setRole(data.role_name || '');
@@ -59,21 +65,29 @@ export default function ProfileScreen() {
             user: { ...prev.user, ...data, role_name: data.role_name || prev.user?.role_name }
           }));
         } else {
-          setFirstName(auth.user.first_name || '');
-          setLastName(auth.user.last_name || '');
-          setUsername(auth.user.username || '');
-          setContactNumber(auth.user.contact_number || '');
-          setRole(auth.user.role_name || auth.user.role || '');
-          setCreatedAt(auth.user.created_at || '');
-          setStatus(auth.user.status || '');
+          const errorData = await res.json().catch(() => ({}));
+          const authUser = auth.user || {};
+          console.warn('Profile API fetch failed:', errorData);
+          setFirstName(authUser.first_name || authUser.full_name?.split(' ')[0] || '');
+          setLastName(authUser.last_name || authUser.full_name?.split(' ').slice(1).join(' ') || '');
+          setEmail(authUser.email || '');
+          setUsername(authUser.username || '');
+          setContactNumber(authUser.contact_number || '');
+          setRole(authUser.role_name || authUser.role || '');
+          setCreatedAt(authUser.created_at || '');
+          setStatus(authUser.status || '');
         }
       } catch (err) {
         console.error('Failed to load profile', err);
-        setFirstName(auth.user.first_name || '');
-        setLastName(auth.user.last_name || '');
-        setUsername(auth.user.username || '');
-        setContactNumber(auth.user.contact_number || '');
-        setRole(auth.user.role_name || auth.user.role || '');
+        const authUser = auth.user || {};
+        setFirstName(authUser.first_name || authUser.full_name?.split(' ')[0] || '');
+        setLastName(authUser.last_name || authUser.full_name?.split(' ').slice(1).join(' ') || '');
+        setEmail(authUser.email || '');
+        setUsername(authUser.username || '');
+        setContactNumber(authUser.contact_number || '');
+        setRole(authUser.role_name || authUser.role || '');
+        setCreatedAt(authUser.created_at || '');
+        setStatus(authUser.status || '');
       }
     };
     load();
@@ -225,6 +239,22 @@ export default function ProfileScreen() {
                 />
               ) : (
                 <Text style={styles.value}>{lastName}</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Email</Text>
+              {isEditing ? (
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                />
+              ) : (
+                <Text style={styles.value}>{email || '-'}</Text>
               )}
             </View>
 

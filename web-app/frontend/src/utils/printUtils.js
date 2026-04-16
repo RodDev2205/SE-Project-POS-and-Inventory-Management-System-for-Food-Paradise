@@ -24,7 +24,7 @@ export const printReceipt = async (orderData) => {
     }
 
     // Configure the printer (serial connection COM6)
-    const printer = qz.configs.create("POS-58(copy of 1)");
+    const printer = qz.configs.create("XP-80C");
 
 
     console.log("📄 Formatting receipt for print...");
@@ -49,26 +49,32 @@ export const printReceipt = async (orderData) => {
     receipt.push('\x1B\x61\x00'); // left
     receipt.push(`Time: ${orderData.date}\n`);
     receipt.push(`Receipt No: #${orderData.orderId}\n`);
+    receipt.push(`${orderData.username || 'Cashier'}\n`);
     receipt.push(`Order Type: ${orderData.orderType}\n`);
     receipt.push(`Payment: ${orderData.paymentMethod}\n`);
     receipt.push('-------------------------------\n');
+    if (orderData.discountType && orderData.discountType !== 'none') {
+    receipt.push('-------------------------------\n');
+    receipt.push(`Discount: ${orderData.discountType}\n`);
+    if (orderData.discountHolderName) receipt.push(`Name: ${orderData.discountHolderName}\n`);
+    if (orderData.discountHolderId) receipt.push(`ID No: ${orderData.discountHolderId}\n`);
+    }
     receipt.push('Qty  Item                  Price\n');
     receipt.push('-------------------------------\n');
     orderData.cart.forEach(item => {
-      const total = item.qty * item.price;
-      // right-align price in 10-char field for better alignment
-      const priceField = `PHP${total.toFixed(2)}`.padStart(10);
-      receipt.push(`${item.qty.toString().padStart(3)}  ${item.item.padEnd(16)} ${priceField}\n`);
-      const unitPriceField = `PHP${item.price.toFixed(2)}`.padStart(10);
+     const total = (item.qty || 0) * (item.price || 0);
+  const priceField = `PHP${(total || 0).toFixed(2)}`.padStart(10);
+  receipt.push(`${(item.qty || 0).toString().padStart(3)}  ${(item.item || '').padEnd(16)} ${priceField}\n`);
+  const unitPriceField = `PHP${(item.price || 0).toFixed(2)}`.padStart(10);
       receipt.push(`   @ ${unitPriceField}\n`);
     });
     receipt.push('-------------------------------\n');
-    receipt.push(`Subtotal:              PHP${orderData.total.toFixed(2)}\n`);
+    receipt.push(`Subtotal:               PHP${(orderData.subtotal || 0).toFixed(2)}\n`);
     if (orderData.paymentMethod === "Cash") {
-      receipt.push(`Given:                 PHP${parseFloat(orderData.given).toFixed(2)}\n`);
+      receipt.push(`Cash:                 PHP${parseFloat(orderData.given).toFixed(2)}\n`);
       receipt.push(`Change:                PHP${parseFloat(orderData.change).toFixed(2)}\n`);
     }
-    receipt.push(`TOTAL:                 PHP${orderData.total.toFixed(2)}\n`);
+    receipt.push(`TOTAL:                 PHP${(orderData.total || 0).toFixed(2)}\n`);
     receipt.push('-------------------------------\n');
     receipt.push('\x1B\x61\x01');
     receipt.push('Thank you for dining!\n');

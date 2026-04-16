@@ -1,5 +1,5 @@
 import { db } from "../config/db.js";
-import { io } from "../../server.js"; // used to notify realtime updates
+// import { io } from "../../server.js"; // moved to dynamic import to avoid circular dependency
 
 // NOTE: Ensure your database schema includes an `order_type` column in transactions,
 // e.g.:
@@ -50,13 +50,14 @@ export const completeSale = async (req, res) => {
     await connection.beginTransaction();
 
     let subtotal = 0;
+    let vatExclusiveSubtotal = 0;
     const transactionItemsData = [];
     const ingredientDeductions = new Map(); // Track ingredient deductions needed
 
     // ==================== STEP 1: Validate items & collect ingredient needs ====================
     for (const item of cart) {
       const [productRows] = await connection.query(
-        `SELECT product_id, price FROM products WHERE product_id = ?`,
+        `SELECT product_id, price, vat_type FROM products WHERE product_id = ?`,
         [item.product_id]
       );
 
@@ -69,14 +70,21 @@ export const completeSale = async (req, res) => {
       }
 
       const price = Number(productRows[0].price);
+      const vatType = productRows[0].vat_type;
+      const priceExclVat = vatType === 'vat' ? price / 1.12 : price;
       const itemTotal = price * item.qty;
+      const itemTotalExclVat = priceExclVat * item.qty;
+
       subtotal += itemTotal;
+      vatExclusiveSubtotal += itemTotalExclVat;
 
       transactionItemsData.push({
         menu_id: item.product_id,
         quantity: item.qty,
         price: price,
         total: itemTotal,
+        priceExclVat,
+        totalExclVat: itemTotalExclVat,
       });
 
       // Get linked ingredients
@@ -132,16 +140,24 @@ export const completeSale = async (req, res) => {
     }
 
     // ==================== STEP 3: Calculate totals ====================
-    const discountObj = discount || { type: "none", value: 0 };
-    let discountAmount = 0;
+
+
+    const discountObj = discount || { type: "none", value: 0, amount: 0 };
+    let discountAmount = discountObj.amount || 0;
+    const useVatExclusivePricing = discountObj.type === "senior" || discountObj.type === "pwd";
+    const effectiveSubtotal = useVatExclusivePricing ? vatExclusiveSubtotal : subtotal;
 
     if (discountObj.type === "percentage") {
-      discountAmount = (subtotal * discountObj.value) / 100;
+      discountAmount = discountAmount || (effectiveSubtotal * discountObj.value) / 100;
     } else if (discountObj.type === "fixed") {
-      discountAmount = discountObj.value;
+      discountAmount = discountAmount || discountObj.value;
+    } else if (useVatExclusivePricing) {
+      // Senior and PWD discounts are both a fixed 20% discount applied to VAT-exclusive prices.
+      discountObj.value = 0.2;
+      discountAmount = discountAmount || effectiveSubtotal * 0.2;
     }
 
-    const totalAmount = subtotal - discountAmount;
+    const totalAmount = effectiveSubtotal - discountAmount;
     const changeAmount = Number(amountPaid) - totalAmount;
 
     if (changeAmount < 0) {
@@ -188,12 +204,14 @@ export const completeSale = async (req, res) => {
     const transactionNumber = generateTransactionNumber();
 
     const [transactionResult] = await connection.query(
-      `INSERT INTO transactions 
-       (transaction_number, subtotal, discount_type, discount_value, discount_amount, total_amount, payment_method, amount_paid, change_amount, cashier_id, branch_id, status, order_type)
+      `INSERT INTO transactions
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount,
+        total_amount, payment_method, amount_paid, change_amount,
+        cashier_id, branch_id, status, order_type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transactionNumber,
-        subtotal,
+        effectiveSubtotal,
         discountObj.type || "none",
         discountObj.value || 0,
         discountAmount,
@@ -214,11 +232,27 @@ export const completeSale = async (req, res) => {
 
     // ==================== STEP 6: Insert transaction items ====================
     for (const item of transactionItemsData) {
+      const itemPrice = useVatExclusivePricing ? item.priceExclVat : item.price;
+      const itemTotal = useVatExclusivePricing ? item.totalExclVat : item.total;
       await connection.query(
         `INSERT INTO transaction_items 
          (transaction_id, menu_id, quantity, price, total, voided_quantity)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [transactionId, item.menu_id, item.quantity, item.price, item.total, 0]
+        [transactionId, item.menu_id, item.quantity, itemPrice, itemTotal, 0]
+      );
+    }
+
+    // ==================== STEP 7: Insert discount details if applicable ====================
+    if ((discountObj.type === "senior" || discountObj.type === "pwd") && discountObj.verification) {
+      await connection.query(
+        `INSERT INTO discount_details (name, id_number, discount_type, transaction_id)
+         VALUES (?, ?, ?, ?)`,
+        [
+          discountObj.verification.fullName,
+          discountObj.verification.idNumber,
+          discountObj.type,
+          transactionId
+        ]
       );
     }
 
@@ -233,6 +267,8 @@ export const completeSale = async (req, res) => {
       referenceId: transactionId
     });
 
+    // Dynamic import to avoid circular dependency
+    const { io } = await import("../../server.js");
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
     io.emit('dashboardUpdate', { branch_id: user.branch_id });
 
@@ -243,11 +279,145 @@ export const completeSale = async (req, res) => {
       transactionNumber,
       totalAmount,
       changeAmount,
+      cashierName: user.name || user.username || 'Cashier',
+      discountType: discountObj?.type || 'none',
+      discountAmount: discountAmount ?? 0,
+      discountHolderName: discount?.holderName || '',
+      discountHolderId: discount?.holderId || '',
     });
   } catch (error) {
     await connection.rollback();
     console.error("POS Error:", error);
     res.status(500).json({ success: false, message: "Server error: " + error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * Creates a new transaction
+ * @param {number} branchId - The branch ID
+ * @param {Array} items - Array of items [{product_id, price, quantity}]
+ * @param {Object} options - Additional options
+ * @param {string} options.paymentMethod - Payment method
+ * @param {number} options.amountPaid - Amount paid by customer
+ * @param {number} options.cashierId - Cashier user ID
+ * @param {string} options.orderType - Order type ('dine-in' or 'takeout')
+ * @param {Object} options.discount - Discount object {type: 'percentage'|'fixed'|'senior'|'pwd', value: number}
+ *                                   For senior and pwd, the backend treats value as 0.2 (20%).
+ * @param {Object} options.verification - Verification data for senior/pwd {fullName, idNumber, discountType}
+ * @returns {Object} Transaction details
+ */
+export const createTransaction = async (branchId, items, options = {}) => {
+  if (!branchId || !items || items.length === 0) {
+    throw new Error('Branch ID and items array are required');
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+
+
+    // Calculate subtotal
+    let subtotal = 0;
+    for (const item of items) {
+      if (!item.product_id || !item.price || !item.quantity) {
+        throw new Error('Each item must have product_id, price, and quantity');
+      }
+      subtotal += Number(item.price) * Number(item.quantity);
+    }
+
+    // Calculate discount if provided
+    const discount = options.discount || { type: 'none', value: 0 };
+    let discountAmount = 0;
+    if (discount.type === 'percentage') {
+      discountAmount = (subtotal * discount.value) / 100;
+    } else if (discount.type === 'fixed') {
+      discountAmount = discount.value;
+    } else if (discount.type === 'senior' || discount.type === 'pwd') {
+      discount.value = 0.2;
+      discountAmount = subtotal * 0.2;
+    }
+
+    // Calculate total
+    const totalAmount = subtotal - discountAmount;
+
+    // Generate transaction number
+    const transactionNumber = generateTransactionNumber();
+
+    // Insert transaction
+    const [transactionResult] = await connection.query(
+      `INSERT INTO transactions
+       (transaction_number, subtotal, discount_type, discount_value, discount_amount,
+        total_amount, payment_method, amount_paid, change_amount,
+        cashier_id, branch_id, status, order_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        transactionNumber,
+        subtotal,
+        discount.type || 'none',
+        discount.value || 0,
+        discountAmount,
+        totalAmount,
+        options.paymentMethod || 'cash',
+        options.amountPaid || totalAmount,
+        (options.amountPaid || totalAmount) - totalAmount,
+        options.cashierId || null,
+        branchId,
+        'Completed',
+        options.orderType || 'dine-in'
+      ]
+    );
+
+    const transactionId = transactionResult.insertId;
+
+    // Insert transaction items
+    for (const item of items) {
+      await connection.query(
+        `INSERT INTO transaction_items
+         (transaction_id, menu_id, quantity, price, total, voided_quantity)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          transactionId,
+          item.product_id,
+          item.quantity,
+          item.price,
+          Number(item.price) * Number(item.quantity),
+          0
+        ]
+      );
+    }
+
+    // Insert discount details if applicable
+    if ((discount.type === "senior" || discount.type === "pwd") && discount.verification) {
+      await connection.query(
+        `INSERT INTO discount_details (name, id_number, discount_type, transaction_id)
+         VALUES (?, ?, ?, ?)`,
+        [
+          discount.verification.fullName,
+          discount.verification.idNumber,
+          discount.type,
+          transactionId
+        ]
+      );
+    }
+
+    await connection.commit();
+
+    return {
+      transactionId,
+      transactionNumber,
+      subtotal,
+      discountAmount,
+      totalAmount,
+      items: items.length
+    };
+
+  } catch (error) {
+    await connection.rollback();
+    throw error;
   } finally {
     connection.release();
   }
@@ -311,8 +481,21 @@ export const getTransactionDetails = async (req, res) => {
       [transactionId]
     );
 
+    // Fetch discount details if applicable (senior or pwd discount)
+    let discountDetails = null;
+    if (transaction.discount_type === 'senior' || transaction.discount_type === 'pwd') {
+      const [discountRows] = await db.query(
+        `SELECT name, id_number, discount_type FROM discount_details WHERE transaction_id = ?`,
+        [transactionId]
+      );
+      
+      if (discountRows && discountRows.length > 0) {
+        discountDetails = discountRows[0];
+      }
+    }
+
     // transaction object now includes branch_address and branch_contact
-    res.status(200).json({ transaction, items });
+    res.status(200).json({ transaction, items, discountDetails });
   } catch (error) {
     console.error("DB ERROR (getTransactionDetails):", error);
     res.status(500).json({ message: "Database error", error: error.message });
@@ -486,7 +669,8 @@ export const voidTransaction = async (req, res) => {
       referenceId: transaction_id
     });
 
-    // Emit dashboard updates
+    // Emit dashboard updates - dynamic import to avoid circular dependency
+    const { io } = await import("../../server.js");
     io.to(`branch_${user.branch_id}`).emit('dashboardUpdate', { branch_id: user.branch_id });
     io.emit('dashboardUpdate', { branch_id: user.branch_id });
 

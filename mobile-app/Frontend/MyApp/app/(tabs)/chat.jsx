@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { StatusBar as RNStatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -11,6 +12,7 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
@@ -26,6 +28,19 @@ export default function MessagesScreen() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Reset modal states when tab loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // This runs when the screen loses focus
+        setNotificationsVisible(false);
+        setShowSettingsMenu(false);
+        setShowLogoutModal(false);
+      };
+    }, [])
+  );
 
   // update branch preview when a new message arrives
   const handleNewMessage = (branchId, text, senderName, time) => {
@@ -38,7 +53,7 @@ export default function MessagesScreen() {
     );
   };
   const [loading, setLoading] = useState(true);
-  const { notifications, toggleNotificationRead, unreadCount, auth, handleNotificationClick, logout } = useContext(NotificationContext);
+  const { notifications, toggleNotificationRead, markAllAsRead, toggleAllReadUnread, unreadCount, auth, handleNotificationClick, logout } = useContext(NotificationContext);
 
   const handleNotifications = () => {
     setShowSettingsMenu(false);
@@ -77,43 +92,43 @@ export default function MessagesScreen() {
   const handleCancelLogout = () => {
     setShowLogoutModal(false);
   };
-  useEffect(() => {
-    const fetchBranches = async () => {
-      if (!auth?.token) return;
-      try {
-        setLoading(true);
-        const response = await fetch('https://deployment-backend-repo-production.up.railway.app/api/chat/branches-with-messages', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${auth.token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!response.ok) throw new Error('Failed to fetch branches');
-        const data = await response.json();
-        
-        // Debug raw response
-        console.log('🔍 branches-with-messages response:', data);
-        // Format branches for display
-        const formattedBranches = data.map((branch, index) => ({
-          id: branch.branch_id.toString(),
-          branchName: branch.branch_name,
-          // API now returns lastMessage/lastTime and sender_name
-          lastMessage: branch.lastMessage || branch.last_message || 'No messages yet',
-          lastMessageTime: branch.lastTime || branch.last_message_time || '',
-          senderName: branch.sender_name || '',
-          isOnline: true, // You can determine this based on last activity
-          avatar: String(index + 1),
-        }));
-        
-        setBranches(formattedBranches);
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchBranches = async () => {
+    if (!auth?.token) return;
+    try {
+      setLoading(true);
+      const response = await fetch('https://deployment-backend-repo-production.up.railway.app/api/chat/branches-with-messages', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch branches');
+      const data = await response.json();
+      
+      // Debug raw response
+      console.log('🔍 branches-with-messages response:', data);
+      // Format branches for display
+      const formattedBranches = data.map((branch, index) => ({
+        id: branch.branch_id.toString(),
+        branchName: branch.branch_name,
+        // API now returns lastMessage/lastTime and sender_name
+        lastMessage: branch.lastMessage || branch.last_message || 'No messages yet',
+        lastMessageTime: branch.lastTime || branch.last_message_time || '',
+        senderName: branch.sender_name || '',
+        isOnline: true, // You can determine this based on last activity
+        avatar: String(index + 1),
+      }));
+      
+      setBranches(formattedBranches);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchBranches();
   }, [auth?.token]);
 
@@ -126,6 +141,17 @@ export default function MessagesScreen() {
       payment: '#10b981',
     };
     return colorMap[type] || '#666';
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchBranches();
+    } catch (error) {
+      console.error('Error refreshing chat data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // If a chat is selected, show the chatroom
@@ -170,7 +196,7 @@ export default function MessagesScreen() {
               <View style={styles.dropdownMenu}>
                 <TouchableOpacity style={styles.menuItem} onPress={handleProfileEdit}>
                   <Ionicons name="person-outline" size={18} color={Colors.textPrimary} />
-                  <Text style={styles.menuText}>Admin</Text>
+                  <Text style={styles.menuText}>Super Admin</Text>
                 </TouchableOpacity>
                 <View style={styles.menuDivider} />
                 <TouchableOpacity style={styles.menuItem} onPress={handleBugReports}>
@@ -192,6 +218,14 @@ export default function MessagesScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryGreen]}
+            tintColor={Colors.primaryGreen}
+          />
+        }
       >
         {/* Title */}
         <Text style={styles.pageTitle}>Messages</Text>
@@ -247,44 +281,60 @@ export default function MessagesScreen() {
         <View style={styles.notificationsDropdown}>
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.readAllButton}
+                onPress={toggleAllReadUnread}
+              >
+                <Text style={styles.readAllButtonText}>
+                  {unreadCount > 0 ? 'Read All' : 'Unread All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.notificationDropdownItem,
-                  !item.read && styles.notificationDropdownItemUnread,
-                ]}
-                onPress={() => handleNotificationClick(item, router)}
-              >
-                <View
+            {notifications.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#666', textAlign: 'center' }}>
+                  No low or out of stock
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.notificationIconSmall,
-                    { backgroundColor: getIconColor(item.type) },
+                    styles.notificationDropdownItem,
+                    !item.read && styles.notificationDropdownItemUnread,
                   ]}
+                  onPress={() => handleNotificationClick(item, router)}
                 >
-                  <Ionicons name={item.icon} size={12} color="#fff" />
-                </View>
-                <View style={styles.notificationDropdownContent}>
-                  <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
-                    {item.message}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.notificationIconSmall,
+                      { backgroundColor: getIconColor(item.type) },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={12} color="#fff" />
+                  </View>
+                  <View style={styles.notificationDropdownContent}>
+                    <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
+                      {item.message}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.dropdownFooter}
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Text style={styles.dropdownFooterText}>Close</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.dropdownFooter}
+            onPress={() => setNotificationsVisible(false)}
+          >
+            <Text style={styles.dropdownFooterText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -722,5 +772,16 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  readAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryGreen,
+    borderRadius: 4,
+  },
+  readAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

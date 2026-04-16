@@ -19,8 +19,10 @@ export default function CreateAccountForm({
   onBackToLogin,
   loading = false,
 }) {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -30,12 +32,15 @@ export default function CreateAccountForm({
 
   const validate = () => {
     const e = {};
-    if (!fullName.trim()) e.fullName = 'Full name is required';
-    if (!username.trim()) e.username = 'Username is required';
+    if (!firstName || !firstName.trim()) e.firstName = 'First name is required';
+    if (!lastName || !lastName.trim()) e.lastName = 'Last name is required';
+    if (!username || !username.trim()) e.username = 'Username is required';
+    if (!email || !email.trim()) e.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(email.trim())) e.email = 'Please enter a valid email address';
     if (!password) e.password = 'Password is required';
-    if (password.length < 6) e.password = 'Password must be at least 6 characters';
+    if (password && password.length < 6) e.password = 'Password must be at least 6 characters';
     if (!confirmPassword) e.confirmPassword = 'Please confirm your password';
-    if (password !== confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (password && password !== confirmPassword) e.confirmPassword = 'Passwords do not match';
     return e;
   };
 
@@ -47,8 +52,10 @@ export default function CreateAccountForm({
     }
     setErrors({});
     onCreateAccount({
-      fullName: fullName.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
       username: username.trim(),
+      email: email.trim(),
       password,
       role_id: 3, // automatically assign Super Admin
     });
@@ -74,11 +81,21 @@ export default function CreateAccountForm({
         </Text>
 
         <AppTextInput
-          label="Full Name"
-          placeholder="Enter full name"
-          value={fullName}
-          onChangeText={(t) => { setFullName(t); setErrors(e => ({ ...e, fullName: undefined })); }}
-          error={errors.fullName}
+          label="First Name"
+          placeholder="Enter first name"
+          value={firstName}
+          onChangeText={(t) => { setFirstName(t); setErrors(e => ({ ...e, firstName: undefined })); }}
+          error={errors.firstName}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+
+        <AppTextInput
+          label="Last Name"
+          placeholder="Enter last name"
+          value={lastName}
+          onChangeText={(t) => { setLastName(t); setErrors(e => ({ ...e, lastName: undefined })); }}
+          error={errors.lastName}
           autoCapitalize="words"
           returnKeyType="next"
         />
@@ -89,6 +106,17 @@ export default function CreateAccountForm({
           value={username}
           onChangeText={(t) => { setUsername(t); setErrors(e => ({ ...e, username: undefined })); }}
           error={errors.username}
+          autoCapitalize="none"
+          returnKeyType="next"
+        />
+
+        <AppTextInput
+          label="Email"
+          placeholder="Enter email address"
+          value={email}
+          onChangeText={(t) => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
+          error={errors.email}
+          keyboardType="email-address"
           autoCapitalize="none"
           returnKeyType="next"
         />

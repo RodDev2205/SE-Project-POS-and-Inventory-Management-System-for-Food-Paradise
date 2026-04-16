@@ -44,7 +44,12 @@ export default function POSCashier({ isCashier, isAdmin }) {
       });
   }, []);
 
-  const totalAmount = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const vatAdjustedSubtotal = cart.reduce((sum, item) => {
+    const adjustedPrice = item.vat_type === 'vat' ? item.price / 1.12 : item.price;
+    return sum + item.qty * adjustedPrice;
+  }, 0);
+  const totalAmount = subtotal;
 
   const filteredItems = useMemo(() => {
     let result = items.filter(
@@ -100,6 +105,7 @@ export default function POSCashier({ isCashier, isAdmin }) {
           <ReceiptModal
             transactionId={data.transactionId}
             transactionNumber={data.transactionNumber}
+            subtotal={subtotal}
             total={data.totalAmount}
             change={data.changeAmount}
             cart={cart}
@@ -140,10 +146,33 @@ export default function POSCashier({ isCashier, isAdmin }) {
     });
   };
 
+  const incrementItem = (productId) => {
+    setCart((prev) => {
+      const updated = prev.map((i) => ({ ...i }));
+      const idx = updated.findIndex((i) => i.product_id === productId);
+      if (idx !== -1) {
+        updated[idx].qty += 1;
+      }
+      return updated;
+    });
+  };
+
+  const updateItemQuantity = (productId, newQty) => {
+    setCart((prev) => {
+      const updated = prev.map((i) => ({ ...i }));
+      const idx = updated.findIndex((i) => i.product_id === productId);
+      if (idx !== -1 && newQty > 0) {
+        updated[idx].qty = newQty;
+      }
+      return updated;
+    });
+  };
+
   const handleOpenPayment = () => {
     setModalContent(
       <PaymentModal
-        totalAmount={totalAmount}
+        subtotal={subtotal}
+        vatAdjustedSubtotal={vatAdjustedSubtotal}
         onConfirm={handleCheckout}
         onClose={() => setModalOpen(false)}
       />
@@ -212,9 +241,12 @@ export default function POSCashier({ isCashier, isAdmin }) {
           <ReceiptPanel
             cart={cart}
             totalAmount={totalAmount}
+            subtotal={subtotal}
             handleCheckout={handleOpenPayment}
             setCart={setCart}
             decrementItem={decrementItem}
+            incrementItem={incrementItem}
+            updateItemQuantity={updateItemQuantity}
             isCashier={isCashier}
             isAdmin={isAdmin}
             handleVoidTransaction={handleVoidTransaction}

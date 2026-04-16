@@ -11,8 +11,10 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { io } from 'socket.io-client';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
@@ -52,6 +54,8 @@ export default function DashboardScreen() {
   const {
     notifications,
     toggleNotificationRead,
+    markAllAsRead,
+    toggleAllReadUnread,
     unreadCount,
     auth,
     logout,
@@ -62,7 +66,21 @@ export default function DashboardScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
 
+  // Reset modal states when tab loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // This runs when the screen loses focus
+        setNotificationsVisible(false);
+        setShowSettingsMenu(false);
+        setShowLogoutModal(false);
+      };
+    }, [])
+  );
+
   const [totalSales, setTotalSales] = useState(null);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [voidedCount, setVoidedCount] = useState(0);
   const [transactionCounts, setTransactionCounts] = useState({
     completed_count: 0,
     partial_refunded_count: 0,
@@ -71,11 +89,13 @@ export default function DashboardScreen() {
   });
   const [lowStockCount, setLowStockCount] = useState(null);
   const [activeEmployees, setActiveEmployees] = useState(null);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [statsLoading, setStatsLoading] = useState(false);
   const [branchesWeeklySales, setBranchesWeeklySales] = useState([]);
   const [branchesWeeklySalesLoading, setBranchesWeeklySalesLoading] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [chartsVisible, setChartsVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ================================
   // LIVE DATE/TIME UPDATER
@@ -134,6 +154,8 @@ export default function DashboardScreen() {
         const salesData = await salesResp.json();
         console.log('salesData', salesData);
         setTotalSales(salesData.total_sales ?? 0);
+        setCompletedCount(salesData.completed_count ?? 0);
+        setVoidedCount(salesData.voided_count ?? 0);
         setTransactionCounts({
           completed_count: salesData.completed_count ?? 0,
           partial_refunded_count: salesData.partial_refunded_count ?? 0,
@@ -163,6 +185,31 @@ export default function DashboardScreen() {
       console.error('Dashboard fetch error:', error);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  const fetchPendingMenuApprovals = async () => {
+    if (!auth?.token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/menu-superadmin/products`, {
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!res.ok) {
+        console.warn('Failed to fetch pending approvals count', res.status);
+        return;
+      }
+
+      const data = await res.json();
+      const pendingCount = (data || []).filter(
+        (item) => item.approval_status === 'PENDING'
+      ).length;
+      setPendingApprovalsCount(pendingCount);
+    } catch (err) {
+      console.error('Failed to load pending menu approvals count', err);
     }
   };
 
@@ -266,6 +313,7 @@ export default function DashboardScreen() {
     if (auth.user?.role_id === 2 && !branchId) return;
 
     fetchDashboardStats();
+    fetchPendingMenuApprovals();
     fetchBranchesWeeklySales();
 
     socketRef.current = io(API_BASE, {
@@ -289,6 +337,7 @@ export default function DashboardScreen() {
     socketRef.current.on('dashboardUpdate', () => {
       console.log('📡 Dashboard update received');
       fetchDashboardStats();
+      fetchPendingMenuApprovals();
       // also refresh the weekly sales chart so it reflects latest transactions
       fetchBranchesWeeklySales();
     });
@@ -358,6 +407,21 @@ export default function DashboardScreen() {
       payment: '#10b981',
     };
     return colorMap[type] || '#666';
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchDashboardStats(),
+        fetchPendingMenuApprovals(),
+        fetchBranchesWeeklySales()
+      ]);
+    } catch (error) {
+      console.error('Error refreshing dashboard data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleLogout = () => {
@@ -436,6 +500,14 @@ export default function DashboardScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primaryGreen]}
+            tintColor={Colors.primaryGreen}
+          />
+        }
       >
         {/* Dashboard title */}
         <Text style={styles.pageTitle}>Dashboard</Text>
@@ -446,54 +518,87 @@ export default function DashboardScreen() {
 
         {/* ── Stat cards 2x2 ─────────────────────────────────── */}
         <View style={styles.cardsGrid}>
-          <StatCard
-            label="Total Sales today"
-            value={
-              statsLoading
-                ? 'Loading...'
-                : totalSales != null
-                ? `₱ ${totalSales.toLocaleString()}`
-                : 'N/A'
-            }
-            dotColor="#22c55e"
-            bg="#dcfce7"
-          />
-          <StatCard
-            label="Transactions"
-            value={
-              statsLoading
-                ? 'Loading...'
-                : transactionCounts
-                ? `C:${transactionCounts.completed_count} P:${transactionCounts.partial_refunded_count} R:${transactionCounts.refunded_count} V:${transactionCounts.voided_count}`
-                : 'N/A'
-            }
-            dotColor="#06b6d4"
-            bg="#cffafe"
-          />
-          <StatCard
-            label="Low Stock Items"
-            value={
-              statsLoading
-                ? 'Loading...'
-                : lowStockCount != null
-                ? `${lowStockCount} Items`
-                : 'N/A'
-            }
-            dotColor="#ef4444"
-            bg="#fee2e2"
-          />
-          <StatCard
-            label="Active Employees"
-            value={
-              statsLoading
-                ? 'Loading...'
-                : activeEmployees != null
-                ? `${activeEmployees} Staff`
-                : 'N/A'
-            }
-            dotColor="#f97316"
-            bg="#ffedd5"
-          />
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('activity')}>
+            <StatCard
+              label="Total Sales today"
+              value={
+                statsLoading
+                  ? 'Loading...'
+                  : totalSales != null
+                  ? `₱ ${totalSales.toLocaleString()}`
+                  : 'N/A'
+              }
+              dotColor="#22c55e"
+              bg="#dcfce7"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('activity')}>
+            <StatCard
+              label="Completed Transaction"
+              value={
+                statsLoading
+                  ? 'Loading...'
+                  : completedCount != null
+                  ? `${completedCount} Orders`
+                  : 'N/A'
+              }
+              dotColor="#06b6d4"
+              bg="#cffafe"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('activity')}>
+            <StatCard
+              label="Voided Transaction"
+              value={
+                statsLoading
+                  ? 'Loading...'
+                  : voidedCount != null
+                  ? `${voidedCount} Orders`
+                  : 'N/A'
+              }
+              dotColor="#ef4444"
+              bg="#fee2e2"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('inventory')}>
+            <StatCard
+              label="Low Stock Items"
+              value={
+                statsLoading
+                  ? 'Loading...'
+                  : lowStockCount != null
+                  ? `${lowStockCount} Items`
+                  : 'N/A'
+              }
+              dotColor="#f39c12"
+              bg="#fef3c7"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('profile')}>
+            <StatCard
+              label="Active Employees"
+              value={
+                statsLoading
+                  ? 'Loading...'
+                  : activeEmployees != null
+                  ? `${activeEmployees} Staff`
+                  : 'N/A'
+              }
+              dotColor="#f97316"
+              bg="#ffedd5"
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: '#ede9fe', borderWidth: 1, borderColor: '#e5e7eb' }]}
+            onPress={() => router.push('/menu-approval')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.row}>
+              <View style={[styles.dot, { backgroundColor: '#7c3aed' }]} />
+              <Text style={[styles.label, { color: '#4f46e5' }]}>Menu Approval</Text>
+            </View>
+            <Text style={[styles.value, { color: '#1e3a8a' }]}> {pendingApprovalsCount} pendings</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Weekly Sales Overview ───────────────────────────── */}
@@ -539,44 +644,60 @@ export default function DashboardScreen() {
         <View style={styles.notificationsDropdown}>
           <View style={styles.dropdownHeader}>
             <Text style={styles.dropdownHeaderText}>Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.readAllButton}
+                onPress={toggleAllReadUnread}
+              >
+                <Text style={styles.readAllButtonText}>
+                  {unreadCount > 0 ? 'Read All' : 'Unread All'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={{ maxHeight: 280 }} scrollEnabled={true}>
-            {notifications.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.notificationDropdownItem,
-                  !item.read && styles.notificationDropdownItemUnread,
-                ]}
-                onPress={() => toggleNotificationRead(item.id)}
-              >
-                <View
+            {notifications.length === 0 ? (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#666', textAlign: 'center' }}>
+                  No low or out of stock
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.notificationIconSmall,
-                    { backgroundColor: getIconColor(item.type) },
+                    styles.notificationDropdownItem,
+                    !item.read && styles.notificationDropdownItemUnread,
                   ]}
+                  onPress={() => toggleNotificationRead(item.id)}
                 >
-                  <Ionicons name={item.icon} size={12} color="#fff" />
-                </View>
-                <View style={styles.notificationDropdownContent}>
-                  <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
-                    {item.message}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View
+                    style={[
+                      styles.notificationIconSmall,
+                      { backgroundColor: getIconColor(item.type) },
+                    ]}
+                  >
+                    <Ionicons name={item.icon} size={12} color="#fff" />
+                  </View>
+                  <View style={styles.notificationDropdownContent}>
+                    <Text style={styles.notificationDropdownTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.notificationDropdownMessage} numberOfLines={1}>
+                      {item.message}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.dropdownFooter}
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Text style={styles.dropdownFooterText}>Close</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.dropdownFooter}
+            onPress={() => setNotificationsVisible(false)}
+          >
+            <Text style={styles.dropdownFooterText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -744,6 +865,42 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 20,
+  },
+  statCard: {
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 72,
+    width: (width - 16 * 2 - 10) / 2,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  label: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
+  },
+  value: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginTop: 6,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 2,
   },
 
   // Section
@@ -972,5 +1129,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  readAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: Colors.primaryGreen,
+    borderRadius: 4,
+  },
+  readAllButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

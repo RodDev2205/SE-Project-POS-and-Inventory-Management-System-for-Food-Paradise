@@ -89,6 +89,77 @@ export const NotificationProvider = ({ children }) => {
     );
   };
 
+  // mark all notifications as read
+  const markAllAsRead = () => {
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read: true }))
+    );
+  };
+
+  // toggle all notifications between read and unread
+  const toggleAllReadUnread = () => {
+    const hasUnread = notifications.some(n => !n.read);
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read: hasUnread ? true : false }))
+    );
+  };
+
+  const fetchInventoryNotifications = async () => {
+    if (!auth?.token) {
+      console.warn('fetchInventoryNotifications: No auth token available');
+      return;
+    }
+
+    try {
+      let items = [];
+      const endpoint = auth.user?.role_id === 3
+        ? 'https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory'
+        : 'https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients';
+      
+      console.log('fetchInventoryNotifications: Fetching from', endpoint);
+      
+      const res = await fetch(endpoint, {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error(
+          `fetchInventoryNotifications: HTTP ${res.status} ${res.statusText}`,
+          { endpoint, errorResponse: errorText?.substring(0, 200) }
+        );
+        throw new Error(
+          `Failed to fetch inventory: HTTP ${res.status} ${res.statusText}`
+        );
+      }
+      
+      items = await res.json();
+      console.log('fetchInventoryNotifications: Fetched', items?.length, 'items');
+
+      const lowStockItems = (items || []).filter(
+        (it) => Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0)
+      );
+
+      lowStockItems.forEach((item) => {
+        const title = item.quantity <= 0 ? 'No stock' : 'Low stock';
+        addNotification({
+          title: `${title}: ${item.item_name}`,
+          message: `Qty: ${item.quantity}`,
+          time: new Date().toLocaleTimeString(),
+          icon: 'warning',
+          type: 'inventory',
+          target: 'inventory',
+          data: { inventory_id: item.inventory_id },
+        });
+      });
+    } catch (error) {
+      console.error(
+        'Error fetching inventory notifications:',
+        error?.message || error
+      );
+    }
+  };
+
   // universal click handler that also supports navigation targets
   const handleNotificationClick = (notif, router) => {
     markAsRead(notif.id);
@@ -126,22 +197,23 @@ export const NotificationProvider = ({ children }) => {
       // payload tells us an update occurred, but we fetch ALL low-stock items regardless
       try {
         let items = [];
+        const endpoint = auth.user?.role_id === 3
+          ? 'https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory'
+          : 'https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients';
+        
         // fetch all inventory (supersadmin sees all, admin sees their branch only)
-        if (auth.user?.role_id === 3) {
-          const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/all-inventory', {
-            headers: { Authorization: `Bearer ${auth.token}` },
-          });
-          if (res.ok) {
-            items = await res.json();
-          }
+        const res = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        
+        if (res.ok) {
+          items = await res.json();
         } else {
-          const res = await fetch('https://deployment-backend-repo-production.up.railway.app/api/inventory/get-ingredients', {
-            headers: { Authorization: `Bearer ${auth.token}` },
-          });
-          if (res.ok) {
-            items = await res.json();
-          }
+          console.warn(
+            `dashboardUpdate: Failed to fetch inventory - HTTP ${res.status} ${res.statusText}`
+          );
         }
+        
         // generate notifications for ALL low-stock items (not filtered by branch)
         const low = items.filter(
           (it) => Number(it.quantity || 0) <= Number(it.low_stock_threshold || 0)
@@ -159,7 +231,7 @@ export const NotificationProvider = ({ children }) => {
           });
         });
       } catch (err) {
-        console.error('Error handling dashboardUpdate:', err);
+        console.error('Error handling dashboardUpdate:', err?.message || err);
       }
     });
 
@@ -167,6 +239,11 @@ export const NotificationProvider = ({ children }) => {
       socket.disconnect();
     };
   }, [auth]);
+
+  React.useEffect(() => {
+    if (!auth?.token) return;
+    fetchInventoryNotifications();
+  }, [auth?.token]);
 
   // Logout function that clears auth from context and storage
   const logout = async () => {
@@ -184,6 +261,8 @@ export const NotificationProvider = ({ children }) => {
         notifications,
         toggleNotificationRead,
         clearAllNotifications,
+        markAllAsRead,
+        toggleAllReadUnread,
         unreadCount,
         // notification helpers
         addNotification,

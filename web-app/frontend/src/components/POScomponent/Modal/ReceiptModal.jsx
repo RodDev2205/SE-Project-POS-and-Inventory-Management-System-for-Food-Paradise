@@ -5,10 +5,17 @@ import { printReceipt } from '../../../utils/printUtils';
 export default function ReceiptModal({
   transactionId,
   transactionNumber,
+  subtotal = 0,
   total,
   change,
   cart,
   orderType = 'dine-in',
+  cashierName = 'N/A',
+  taxRate = 0,
+  taxAmount = 0,
+  discountType = 'none',
+  discountHolderName = '',
+  discountHolderId = '',
   onClose,
 }) {
   const [showSuccess, setShowSuccess] = useState(false);
@@ -30,9 +37,16 @@ export default function ReceiptModal({
       orderId: transactionNumber,
       orderType: orderType || 'dine-in',
       paymentMethod: "Cash",
-      given: total + change,
-      change: change,
-      total: total,
+      cashierName: cashierName || 'N/A',
+      taxRate: taxRate ?? 0,
+      taxAmount: taxAmount ?? 0,
+      discountType: discountType || 'none',
+      discountHolderName: discountHolderName || '',
+      discountHolderId: discountHolderId || '',
+      given: (total ?? 0) + (change ?? 0),
+      change: change ?? 0,
+      subtotal: subtotal ?? 0,
+      total: total ?? 0,
       cart: cart.map(item => ({
         qty: item.qty || item.quantity || 1,
         item: item.item || item.product_name || "Unknown Item",
@@ -94,13 +108,17 @@ export default function ReceiptModal({
             <span>
               {item.qty} x {item.item || item.product_name}
             </span>
-            <span>₱ {(item.qty * item.price).toFixed(2)}</span>
+            <span>₱ {((item.qty || 0) * (item.price || 0)).toFixed(2)}</span>
           </div>
         ))}
       </div>
 
       <div className="border-t pt-2 space-y-1 text-sm">
-        <div className="flex justify-between font-bold text-base">
+        <div className="flex justify-between text-gray-700">
+          <span>Subtotal:</span>
+          <span>₱ {subtotal.toFixed(2)}</span>
+        </div>
+        <div className="border-t pt-2 flex justify-between font-bold text-base">
           <span>Total:</span>
           <span>₱ {total.toFixed(2)}</span>
         </div>
